@@ -1,0 +1,18 @@
+{
+  "name": "dream-kaleido-flow",
+  "version": "1.0.0",
+  "description": "Interactive kaleidoscope visualization with touch gestures",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "serve": "vite preview"
+  },
+  "dependencies": {
+    "hammerjs": "^2.0.8"
+  },
+  "devDependencies": {
+    "vite": "^5.0.0"
+  }
+}
