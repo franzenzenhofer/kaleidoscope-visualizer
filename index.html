@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#000000">
@@ -31,13 +31,14 @@
     display: block;
     width: 100vw;
     height: 100vh;
-    position: absolute;
+    position: fixed;
     top: 0;
     left: 0;
     cursor: move;
-    /* Prevent all default touch behaviors */
-    touch-action: none;
-    -ms-touch-action: none;
+    background: #000;
+    /* Ensure no gaps or artifacts */
+    image-rendering: auto;
+    -ms-interpolation-mode: bicubic;
   }
   
   /* Prevent bounce on iOS */
@@ -45,19 +46,123 @@
     overscroll-behavior: none;
   }
   
-  /* Handle notch/safe areas on modern phones */
-  @supports (padding: env(safe-area-inset-top)) {
-    body {
-      padding-top: env(safe-area-inset-top);
-      padding-bottom: env(safe-area-inset-bottom);
-      padding-left: env(safe-area-inset-left);
-      padding-right: env(safe-area-inset-right);
+  /* Handle notch/safe areas on modern phones - but don't affect desktop */
+  @media (max-width: 768px) {
+    @supports (padding: env(safe-area-inset-top)) {
+      body {
+        padding-top: env(safe-area-inset-top);
+        padding-bottom: env(safe-area-inset-bottom);
+        padding-left: env(safe-area-inset-left);
+        padding-right: env(safe-area-inset-right);
+      }
+    }
+  }
+  
+  /* Audio button - centered at bottom */
+  #audioBtn {
+    position: fixed;
+    bottom: 30px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 1000;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.5);
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+  }
+  
+  #audioBtn:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.2);
+    color: rgba(255, 255, 255, 0.7);
+  }
+  
+  #audioBtn.active {
+    color: rgba(255, 255, 255, 0.9);
+    background: rgba(255, 255, 255, 0.08);
+    box-shadow: 0 0 20px rgba(255, 255, 255, 0.1);
+    animation: gentleGlow 3s ease-in-out infinite;
+  }
+  
+  @keyframes gentleGlow {
+    0%, 100% { box-shadow: 0 0 10px rgba(255, 255, 255, 0.1); }
+    50% { box-shadow: 0 0 25px rgba(255, 255, 255, 0.15); }
+  }
+  
+  #audioBtn svg {
+    width: 20px;
+    height: 20px;
+    fill: currentColor;
+  }
+  
+  /* Audio level indicator - full width rainbow line at bottom */
+  #audioLevel {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 3px;
+    background: rgba(0, 0, 0, 0.5);
+    overflow: hidden;
+    opacity: 0;
+    transition: opacity 0.5s ease;
+  }
+  
+  #audioLevel.visible {
+    opacity: 1;
+  }
+  
+  #audioLevel .bar {
+    height: 100%;
+    background: linear-gradient(90deg, 
+      #ff0080 0%, 
+      #ff8000 20%, 
+      #ffff00 40%, 
+      #00ff00 60%, 
+      #00ffff 80%, 
+      #ff00ff 100%);
+    transform-origin: left;
+    transform: scaleX(0);
+    transition: transform 0.3s cubic-bezier(0.4, 0.0, 0.2, 1);
+  }
+  
+  
+  /* Mobile adjustments */
+  @media (max-width: 768px) {
+    #audioBtn {
+      bottom: calc(30px + env(safe-area-inset-bottom));
+    }
+    
+    #audioLevel {
+      bottom: 0;
+      width: 100%;
     }
   }
 </style>
 </head>
 <body>
 <canvas id="c"></canvas>
+
+<!-- Audio Controls -->
+<button id="audioBtn" aria-label="Toggle Audio">
+  <svg viewBox="0 0 24 24">
+    <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.3-3c0 3-2.54 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c3.28-.48 6-3.3 6-6.72h-1.7z"/>
+  </svg>
+</button>
+
+<div id="audioLevel">
+  <div class="bar"></div>
+</div>
+
+
 <script type="module" src="js/main.js"></script>
 </body>
 </html>

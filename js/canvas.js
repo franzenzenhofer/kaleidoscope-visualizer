@@ -8,30 +8,37 @@ export let w, h, dpr, midX, midY;
 
 // MOBILE FIRST resize handler
 export function resize() {
-  // Mobile viewport is primary concern
-  const viewport = window.visualViewport || window;
-  const width = viewport.width || window.innerWidth;
-  const height = viewport.height || window.innerHeight;
+  // Use standard viewport dimensions
+  const width = window.innerWidth;
+  const height = window.innerHeight;
   
   // Start with mobile-optimized DPR
   dpr = Math.min(window.devicePixelRatio || 1, 2);
   
-  // Allow higher DPR only on desktop
+  // Allow higher DPR only on desktop with good performance
   if (window.matchMedia('(min-width: 769px)').matches) {
-    dpr = window.devicePixelRatio || 1;
+    // Cap DPR to prevent performance issues and sizing problems
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
   }
   
-  w = width * dpr;
-  h = height * dpr;
+  // Canvas logical dimensions (CSS pixels)
+  w = width;
+  h = height;
   
+  // Set CSS size first
   canvas.style.width = width + 'px';
   canvas.style.height = height + 'px';
-  canvas.width = w;
-  canvas.height = h;
   
+  // Set actual canvas buffer size with DPR
+  canvas.width = width * dpr;
+  canvas.height = height * dpr;
+  
+  // Scale the drawing context to match DPR
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  midX = w / (2 * dpr);
-  midY = h / (2 * dpr);
+  
+  // Midpoints in logical pixels
+  midX = width / 2;
+  midY = height / 2;
 }
 
 // MOBILE FIRST orientation handling

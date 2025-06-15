@@ -1,52 +1,113 @@
 import { resize, canvas, setupMobileViewport } from './canvas.js';
-import { setupToyInteractions, setupOrientationInteraction } from './toy-interactions.js';
+import { setupPointerInteraction, setupHammerGestures, updateToyPhysics, setupDeviceMotion } from './interaction.js';
+import { setupDesktopInteractions, updateDesktopPhysics } from './desktop-interactions.js';
 import { draw } from './renderer.js';
-import { enhanceForDesktop } from './config.js';
+import { enhanceForDesktop, parms } from './config.js';
+import { AudioAnalyzer } from './audio.js';
+import { AudioVisualMapper } from './audio-visual.js';
 
-// MOBILE FIRST initialization sequence
-(() => {
-  // 1. Setup mobile viewport handling first
-  setupMobileViewport();
-  resize();
-  
-  // 2. Rich toy interactions
-  setupToyInteractions(canvas);
-  setupOrientationInteraction();
-  
-  // 3. Enhance for desktop if applicable
+// Initialize canvas first
+setupMobileViewport();
+resize();
+
+// Setup interactions based on device
+if ('ontouchstart' in window) {
+  // Mobile/tablet with touch
+  setupHammerGestures(canvas);
+  setupDeviceMotion(); // Enable tilt controls on mobile
+} else {
+  // Desktop
   enhanceForDesktop();
+  setupPointerInteraction();
+  setupDesktopInteractions(canvas);
+}
+
+// Initialize audio components early
+const audioAnalyzer = new AudioAnalyzer();
+const audioVisual = new AudioVisualMapper(audioAnalyzer);
+
+// Physics update loop
+let lastTime = performance.now();
+function updatePhysics() {
+  const currentTime = performance.now();
+  const deltaTime = currentTime - lastTime;
+  lastTime = currentTime;
   
-  // 4. Critical mobile optimizations
-  // Prevent ALL scrolling/bouncing and unwanted gestures
-  document.addEventListener('touchmove', e => e.preventDefault(), { passive: false });
-  document.addEventListener('gesturestart', e => e.preventDefault(), { passive: false });
-  document.addEventListener('gesturechange', e => e.preventDefault(), { passive: false });
-  document.addEventListener('gestureend', e => e.preventDefault(), { passive: false });
+  // Update toy physics for all devices
+  updateToyPhysics(deltaTime);
   
-  // Prevent double-tap zoom on iOS
-  let lastTouchEnd = 0;
-  document.addEventListener('touchend', e => {
-    const now = Date.now();
-    if (now - lastTouchEnd <= 300) {
-      e.preventDefault();
+  // Update desktop-specific physics
+  if (!('ontouchstart' in window)) {
+    updateDesktopPhysics();
+  }
+  
+  // Update audio visualization
+  updateAudioVisualization();
+  
+  requestAnimationFrame(updatePhysics);
+}
+
+// Update audio visualization in the physics loop
+function updateAudioVisualization() {
+  if (audioAnalyzer.isActive) {
+    // Update visual parameters based on audio
+    audioVisual.update();
+    
+    // Update audio level indicator
+    const audioLevel = document.getElementById('audioLevel');
+    const audioLevelBar = audioLevel?.querySelector('.bar');
+    if (audioLevelBar) {
+      const metrics = audioAnalyzer.getMetrics();
+      audioLevelBar.style.transform = `scaleX(${metrics.volume})`;
     }
-    lastTouchEnd = now;
-  }, { passive: false });
-  
-  // Prevent context menu on long press
-  document.addEventListener('contextmenu', e => e.preventDefault());
-  
-  // Lock viewport on mobile
-  if ('orientation' in window) {
-    document.documentElement.style.height = '100%';
-    document.body.style.height = '100%';
+    
+    // Apply special effects
+    audioVisual.applySpecialEffects(audioAnalyzer.getMetrics());
   }
-  
-  // 5. Start animation immediately for instant mobile feedback
-  requestAnimationFrame(draw);
-  
-  // 6. Wake lock for mobile if available
-  if ('wakeLock' in navigator) {
-    navigator.wakeLock.request('screen').catch(() => {});
+}
+
+updatePhysics();
+
+// Prevent iOS bounce
+document.body.addEventListener('touchmove', (e) => {
+  e.preventDefault();
+}, { passive: false });
+
+// Handle page visibility for performance
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) {
+    // Could pause animation here if needed
+  } else {
+    // Could resume animation here if needed
   }
-})();
+});
+
+// Start animation
+requestAnimationFrame(draw);
+
+// Setup audio button
+const audioBtn = document.getElementById('audioBtn');
+const audioLevel = document.getElementById('audioLevel');
+
+audioBtn.addEventListener('click', async () => {
+  if (!audioAnalyzer.isActive) {
+    // Start audio
+    const success = await audioAnalyzer.start();
+    
+    if (success) {
+      audioBtn.classList.add('active');
+      audioVisual.start();
+      audioLevel.classList.add('visible');
+    } else {
+      alert('Could not access microphone. Please check permissions.');
+    }
+  } else {
+    // Stop audio
+    audioAnalyzer.stop();
+    audioVisual.stop();
+    
+    audioBtn.classList.remove('active');
+    audioLevel.classList.remove('visible');
+  }
+});
+
