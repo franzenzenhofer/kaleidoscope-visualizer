@@ -17,9 +17,24 @@ import { enhanceForDesktop } from './config.js';
   setupDesktopInteraction();
   
   // 4. Critical mobile optimizations
-  // Prevent ALL scrolling/bouncing
+  // Prevent ALL scrolling/bouncing and unwanted gestures
   document.addEventListener('touchmove', e => e.preventDefault(), { passive: false });
   document.addEventListener('gesturestart', e => e.preventDefault(), { passive: false });
+  document.addEventListener('gesturechange', e => e.preventDefault(), { passive: false });
+  document.addEventListener('gestureend', e => e.preventDefault(), { passive: false });
+  
+  // Prevent double-tap zoom on iOS
+  let lastTouchEnd = 0;
+  document.addEventListener('touchend', e => {
+    const now = Date.now();
+    if (now - lastTouchEnd <= 300) {
+      e.preventDefault();
+    }
+    lastTouchEnd = now;
+  }, { passive: false });
+  
+  // Prevent context menu on long press
+  document.addEventListener('contextmenu', e => e.preventDefault());
   
   // Lock viewport on mobile
   if ('orientation' in window) {

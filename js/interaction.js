@@ -36,7 +36,9 @@ export function setupTouchInteraction(element) {
   });
   
   // DOUBLE TAP - Reset to mobile defaults
-  hammer.on('tap', () => {
+  hammer.on('tap', (event) => {
+    // Prevent any default behavior
+    event.preventDefault();
     parms.slices = 8;
     parms.swirlSpeed = 0.15;
     parms.baseRadius = 0.4;
