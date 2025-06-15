@@ -4,6 +4,7 @@ import { parms } from './config.js';
 
 let lastX = 0;
 let lastY = 0;
+let audioVisual = null; // Store reference to audio-visual mapper
 
 // Physics state for toy-like interactions
 const physics = {
@@ -21,21 +22,40 @@ const physics = {
   pulseSpeed: 0
 };
 
+// Helper function to notify audio visual of user interaction
+function notifyUserInteraction(paramName, value) {
+  if (audioVisual && audioVisual.onUserInteraction) {
+    audioVisual.onUserInteraction(paramName, value);
+  }
+}
+
 // Pointer tweaks: drag horizontally to change swirl, vertically to change slice count.
-export function setupPointerInteraction() {
+export function setupPointerInteraction(audioVisualMapper = null) {
+  audioVisual = audioVisualMapper;
+  
   // Only use pointer events on desktop
   if (!('ontouchstart' in window)) {
     window.addEventListener('pointermove', e => {
       const normX = (e.clientX / window.innerWidth  - .5) * 2;
       const normY = (e.clientY / window.innerHeight - .5) * 2;
-      parms.swirlSpeed = 0.05 + Math.abs(normX) * 0.6;
-      parms.slices     = 6 + Math.floor(Math.abs(normY) * 18); // 6–24 slices
+      
+      const newSwirlSpeed = 0.05 + Math.abs(normX) * 0.6;
+      const newSlices = 6 + Math.floor(Math.abs(normY) * 18); // 6–24 slices
+      
+      parms.swirlSpeed = newSwirlSpeed;
+      parms.slices = newSlices;
+      
+      // Notify audio visual of user interaction
+      notifyUserInteraction('swirlSpeed', newSwirlSpeed);
+      notifyUserInteraction('slices', newSlices);
     }, {passive:true});
   }
 }
 
 // Setup Hammer.js for touch gestures
-export function setupHammerGestures(element) {
+export function setupHammerGestures(element, audioVisualMapper = null) {
+  audioVisual = audioVisualMapper;
+  
   const hammer = new Hammer.Manager(element, {
     touchAction: 'none',
     recognizers: [
@@ -93,7 +113,9 @@ export function setupHammerGestures(element) {
     
     // Vertical movement changes slices (like adjusting a dial)
     if (Math.abs(deltaY) > Math.abs(deltaX)) {
-      parms.slices = Math.max(4, Math.min(24, Math.round(parms.slices - deltaY * 0.02)));
+      const newSlices = Math.max(4, Math.min(24, Math.round(parms.slices - deltaY * 0.02)));
+      parms.slices = newSlices;
+      notifyUserInteraction('slices', newSlices);
     }
     
     lastX = event.center.x;
@@ -126,19 +148,28 @@ export function setupHammerGestures(element) {
     // Vertical swipes change complexity
     if (Math.abs(event.velocityY) > Math.abs(event.velocityX)) {
       if (event.velocityY < 0) { // Swipe up = more complex
-        parms.slices = Math.min(24, parms.slices + 4);
-        parms.circles = Math.min(12, parms.circles + 2);
+        const newSlices = Math.min(24, parms.slices + 4);
+        const newCircles = Math.min(12, parms.circles + 2);
+        parms.slices = newSlices;
+        parms.circles = newCircles;
+        notifyUserInteraction('slices', newSlices);
+        notifyUserInteraction('circles', newCircles);
       } else { // Swipe down = simpler
-        parms.slices = Math.max(4, parms.slices - 4);
-        parms.circles = Math.max(3, parms.circles - 2);
+        const newSlices = Math.max(4, parms.slices - 4);
+        const newCircles = Math.max(3, parms.circles - 2);
+        parms.slices = newSlices;
+        parms.circles = newCircles;
+        notifyUserInteraction('slices', newSlices);
+        notifyUserInteraction('circles', newCircles);
       }
     }
   });
   
   // Handle pinch for sizing with spring effect
   hammer.on('pinch', (event) => {
-    const targetSize = 0.18 * event.scale;
-    parms.sizeMod = Math.max(0.1, Math.min(0.5, targetSize));
+    const newSizeMod = Math.max(0.1, Math.min(0.5, 0.18 * event.scale));
+    parms.sizeMod = newSizeMod;
+    notifyUserInteraction('sizeMod', newSizeMod);
     
     // Add spring bounce on pinch end
     if (event.isFinal) {
@@ -152,7 +183,9 @@ export function setupHammerGestures(element) {
     physics.rotationVelocity = event.rotation * 0.01;
     
     // Also adjust hue speed based on rotation speed
-    parms.hueSpeed = Math.max(10, Math.min(100, 40 + Math.abs(event.rotation) / 2));
+    const newHueSpeed = Math.max(10, Math.min(100, 40 + Math.abs(event.rotation) / 2));
+    parms.hueSpeed = newHueSpeed;
+    notifyUserInteraction('hueSpeed', newHueSpeed);
   });
   
   // Double tap for spin boost
@@ -166,8 +199,12 @@ export function setupHammerGestures(element) {
     
     // Random pattern change
     if (Math.random() > 0.5) {
-      parms.slices = Math.floor(Math.random() * 12) + 6;
-      parms.circles = Math.floor(Math.random() * 6) + 4;
+      const newSlices = Math.floor(Math.random() * 12) + 6;
+      const newCircles = Math.floor(Math.random() * 6) + 4;
+      parms.slices = newSlices;
+      parms.circles = newCircles;
+      notifyUserInteraction('slices', newSlices);
+      notifyUserInteraction('circles', newCircles);
     }
   });
   
@@ -177,9 +214,17 @@ export function setupHammerGestures(element) {
     physics.lastShakeTime = Date.now();
     
     // Scramble parameters
-    parms.slices = Math.floor(Math.random() * 16) + 4;
-    parms.circles = Math.floor(Math.random() * 8) + 3;
-    parms.hueSpeed = Math.random() * 60 + 20;
+    const newSlices = Math.floor(Math.random() * 16) + 4;
+    const newCircles = Math.floor(Math.random() * 8) + 3;
+    const newHueSpeed = Math.random() * 60 + 20;
+    
+    parms.slices = newSlices;
+    parms.circles = newCircles;
+    parms.hueSpeed = newHueSpeed;
+    
+    notifyUserInteraction('slices', newSlices);
+    notifyUserInteraction('circles', newCircles);
+    notifyUserInteraction('hueSpeed', newHueSpeed);
   });
   
   // Prevent default touch behavior
@@ -191,7 +236,9 @@ export function setupHammerGestures(element) {
 export function updateToyPhysics(deltaTime) {
   // Apply rotational velocity with momentum
   if (Math.abs(physics.rotationVelocity) > 0.001) {
-    parms.swirlSpeed += physics.rotationVelocity * deltaTime * 0.001;
+    const newSwirlSpeed = parms.swirlSpeed + physics.rotationVelocity * deltaTime * 0.001;
+    parms.swirlSpeed = newSwirlSpeed;
+    notifyUserInteraction('swirlSpeed', newSwirlSpeed);
     
     // Apply friction
     physics.rotationVelocity *= physics.rotationFriction;
@@ -202,56 +249,52 @@ export function updateToyPhysics(deltaTime) {
     }
   }
   
-  // Clamp swirl speed
-  parms.swirlSpeed = Math.max(-1.0, Math.min(1.0, parms.swirlSpeed));
-  
-  // Apply shake effect
-  if (physics.shakeMagnitude > 0.1) {
-    const shakeX = (Math.random() - 0.5) * physics.shakeMagnitude;
-    const shakeY = (Math.random() - 0.5) * physics.shakeMagnitude;
+  // Apply pulse effects
+  if (physics.pulseSpeed > 0.01) {
+    physics.pulsePhase += physics.pulseSpeed * deltaTime * 0.01;
+    const pulse = Math.sin(physics.pulsePhase) * 0.05;
+    const newSizeMod = Math.max(0.1, Math.min(0.5, parms.sizeMod + pulse));
+    parms.sizeMod = newSizeMod;
+    notifyUserInteraction('sizeMod', newSizeMod);
     
-    // Shake affects multiple parameters for chaotic feel
-    parms.swirlSpeed += shakeX * 0.01;
-    parms.hueSpeed = Math.max(10, Math.min(100, parms.hueSpeed + shakeY));
+    physics.pulseSpeed *= 0.98; // Decay
+  }
+  
+  // Apply shake effects
+  if (physics.shakeMagnitude > 0.1) {
+    const shake = (Math.random() - 0.5) * physics.shakeMagnitude * 0.002;
+    const newSwirlSpeed = Math.max(0, parms.swirlSpeed + shake);
+    parms.swirlSpeed = newSwirlSpeed;
+    notifyUserInteraction('swirlSpeed', newSwirlSpeed);
     
     physics.shakeMagnitude *= physics.shakeDecay;
   }
-  
-  // Apply pulse effect
-  if (physics.pulseSpeed > 0.01) {
-    physics.pulsePhase += physics.pulseSpeed * deltaTime * 0.01;
-    const pulse = Math.sin(physics.pulsePhase) * physics.pulseSpeed;
-    
-    parms.sizeMod = Math.max(0.1, Math.min(0.5, 0.2 + pulse * 0.1));
-    physics.pulseSpeed *= 0.95; // Decay
-  }
-  
-  // Natural slowdown when no interaction (like a real spinning toy)
-  if (Math.abs(parms.swirlSpeed) > 0.05 && physics.rotationVelocity === 0) {
-    parms.swirlSpeed *= 0.999;
-  }
 }
 
-// Device motion for tilt controls (if available)
-export function setupDeviceMotion() {
-  if (window.DeviceOrientationEvent) {
-    window.addEventListener('deviceorientation', (event) => {
-      if (event.beta !== null && event.gamma !== null) {
-        // Tilt affects rotation speed
-        const tiltX = event.gamma / 90; // -1 to 1
-        const tiltY = event.beta / 180; // -1 to 1
+export function setupDeviceMotion(audioVisualMapper = null) {
+  audioVisual = audioVisualMapper;
+  
+  if ('DeviceMotionEvent' in window) {
+    window.addEventListener('devicemotion', (event) => {
+      // Use accelerometer for tilt-based rotation
+      if (event.accelerationIncludingGravity) {
+        const x = event.accelerationIncludingGravity.x;
+        const y = event.accelerationIncludingGravity.y;
         
-        // Only apply tilt if significant
-        if (Math.abs(tiltX) > 0.1) {
-          physics.rotationVelocity += tiltX * 0.02;
-        }
+        // Convert tilt to rotation speed (gentle)
+        const tiltInfluence = (x / 10) * 0.1; // Scale down for subtlety
+        const newSwirlSpeed = Math.max(0, Math.min(1, parms.swirlSpeed + tiltInfluence));
+        parms.swirlSpeed = newSwirlSpeed;
+        notifyUserInteraction('swirlSpeed', newSwirlSpeed);
         
-        // Forward/back tilt affects pattern complexity
-        if (Math.abs(tiltY) > 0.2) {
-          const targetSlices = 12 + Math.round(tiltY * 8);
-          parms.slices = Math.max(4, Math.min(24, targetSlices));
+        // Vertical tilt affects complexity
+        const yInfluence = Math.abs(y) / 10;
+        if (yInfluence > 0.3) {
+          const newSlices = Math.max(4, Math.min(24, Math.round(6 + yInfluence * 18)));
+          parms.slices = newSlices;
+          notifyUserInteraction('slices', newSlices);
         }
       }
-    });
+    }, { passive: true });
   }
 }

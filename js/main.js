@@ -10,21 +10,21 @@ import { AudioVisualMapper } from './audio-visual.js';
 setupMobileViewport();
 resize();
 
-// Setup interactions based on device
-if ('ontouchstart' in window) {
-  // Mobile/tablet with touch
-  setupHammerGestures(canvas);
-  setupDeviceMotion(); // Enable tilt controls on mobile
-} else {
-  // Desktop
-  enhanceForDesktop();
-  setupPointerInteraction();
-  setupDesktopInteractions(canvas);
-}
-
 // Initialize audio components early
 const audioAnalyzer = new AudioAnalyzer();
 const audioVisual = new AudioVisualMapper(audioAnalyzer);
+
+// Setup interactions based on device and pass audioVisual for proper blending
+if ('ontouchstart' in window) {
+  // Mobile/tablet with touch
+  setupHammerGestures(canvas, audioVisual);
+  setupDeviceMotion(audioVisual); // Enable tilt controls on mobile
+} else {
+  // Desktop
+  enhanceForDesktop();
+  setupPointerInteraction(audioVisual);
+  setupDesktopInteractions(canvas, audioVisual);
+}
 
 // Physics update loop
 let lastTime = performance.now();

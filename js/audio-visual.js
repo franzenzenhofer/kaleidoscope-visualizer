@@ -27,6 +27,10 @@ export class AudioVisualMapper {
       hueSmoothing: 0.998,       // Increased from 0.995
       parameterSmoothing: 0.98,  // New: general parameter smoothing
       
+      // Interaction blending - how much user input vs audio
+      userInteractionWeight: 0.7,  // 70% user input, 30% audio when interacting
+      audioOnlyWeight: 1.0,        // 100% audio when no user interaction
+      
       // Limits for controlled contraction
       maxRotationSpeed: 0.15,
       maxSizeVariation: 0.6,  // Allow strong contraction
@@ -58,6 +62,15 @@ export class AudioVisualMapper {
     // Current interpolated values
     this.currentValues = { ...this.targetValues };
     
+    // User interaction tracking
+    this.userInteraction = {
+      isActive: false,
+      lastInteractionTime: 0,
+      userValues: { ...this.targetValues },
+      interactionDecay: 0.98,  // How quickly user interaction fades
+      interactionThreshold: 2000  // ms after which interaction is considered over
+    };
+    
     // Base values to return to
     this.baseValues = { ...parms };
     
@@ -77,6 +90,35 @@ export class AudioVisualMapper {
     return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
   }
   
+  // Called by interaction system when user is actively interacting
+  onUserInteraction(paramName, value) {
+    this.userInteraction.isActive = true;
+    this.userInteraction.lastInteractionTime = performance.now();
+    
+    // Store user's intended values
+    if (this.userInteraction.userValues.hasOwnProperty(paramName)) {
+      this.userInteraction.userValues[paramName] = value;
+    }
+  }
+  
+  // Update user interaction state
+  updateUserInteraction() {
+    const currentTime = performance.now();
+    const timeSinceInteraction = currentTime - this.userInteraction.lastInteractionTime;
+    
+    // Check if user interaction has expired
+    if (timeSinceInteraction > this.userInteraction.interactionThreshold) {
+      this.userInteraction.isActive = false;
+    }
+    
+    // Gradually decay user interaction influence
+    if (this.userInteraction.isActive) {
+      return Math.max(0.3, 1 - (timeSinceInteraction / this.userInteraction.interactionThreshold));
+    }
+    
+    return 0;
+  }
+  
   start() {
     this.isActive = true;
     // Store current values as base
@@ -85,6 +127,7 @@ export class AudioVisualMapper {
     Object.keys(this.targetValues).forEach(key => {
       this.targetValues[key] = parms[key];
       this.currentValues[key] = parms[key];
+      this.userInteraction.userValues[key] = parms[key];
     });
     this.lastUpdateTime = performance.now();
   }
@@ -103,6 +146,9 @@ export class AudioVisualMapper {
     this.lastUpdateTime = currentTime;
     
     const metrics = this.audio.getMetrics();
+    
+    // Update user interaction state
+    const userInfluence = this.updateUserInteraction();
     
     // Ultra-smooth value tracking with time-based interpolation
     this.smoothedValues.bass = this.lerp(this.smoothedValues.bass, metrics.bass, 0.08, deltaTime);
@@ -157,10 +203,18 @@ export class AudioVisualMapper {
       deltaTime
     );
     
-    // Calculate target parameter values (don't apply directly)
-    this.targetValues.swirlSpeed = this.baseValues.swirlSpeed + 
-                                  Math.max(-this.config.maxRotationSpeed, 
-                                           Math.min(this.config.maxRotationSpeed, this.smoothedValues.rotation));
+    // Calculate audio-driven target parameter values
+    const audioTargets = {
+      swirlSpeed: this.baseValues.swirlSpeed + 
+                  Math.max(-this.config.maxRotationSpeed, 
+                           Math.min(this.config.maxRotationSpeed, this.smoothedValues.rotation)),
+      sizeMod: 0,
+      baseRadius: 0,
+      circles: this.baseValues.circles,
+      hueSpeed: Math.max(5, Math.min(this.config.maxHueSpeed, 
+                        this.baseValues.hueSpeed + this.smoothedValues.hue)),
+      slices: this.baseValues.slices
+    };
     
     // Smooth size calculations with easing
     const sizeModulation = Math.min(this.config.maxSizeVariation, this.smoothedValues.breathing);
@@ -168,32 +222,39 @@ export class AudioVisualMapper {
     const easedContraction = this.easeInOutCubic(contractionPhase);
     const smoothContraction = 1 - (sizeModulation * 0.4 * (1 - easedContraction));
     
-    this.targetValues.sizeMod = Math.max(0.05, Math.min(0.35, 
+    audioTargets.sizeMod = Math.max(0.05, Math.min(0.35, 
       this.baseValues.sizeMod * smoothContraction));
     
-    this.targetValues.baseRadius = Math.max(0.15, Math.min(0.5,
+    audioTargets.baseRadius = Math.max(0.15, Math.min(0.5,
       this.baseValues.baseRadius * (smoothContraction * 0.8)));
     
     // Smooth circle count changes
     if (this.smoothedValues.bass > 0.5) {
-      this.targetValues.circles = Math.max(3, this.baseValues.circles - Math.floor(this.smoothedValues.bass * 2));
-    } else {
-      this.targetValues.circles = this.baseValues.circles;
+      audioTargets.circles = Math.max(3, this.baseValues.circles - Math.floor(this.smoothedValues.bass * 2));
     }
-    
-    this.targetValues.hueSpeed = Math.max(5, Math.min(this.config.maxHueSpeed, 
-                                         this.baseValues.hueSpeed + this.smoothedValues.hue));
     
     // Ultra-smooth slice changes - much more gradual
     if (metrics.beat && Math.random() > 0.98) { // Even rarer changes
       const variation = Math.random() > 0.5 ? 1 : -1;
-      this.targetValues.slices = Math.max(4, Math.min(12, this.baseValues.slices + variation));
-    } else if (!metrics.beat) {
-      this.targetValues.slices = this.baseValues.slices;
+      audioTargets.slices = Math.max(4, Math.min(12, this.baseValues.slices + variation));
     }
     
-    // Apply ultra-smooth interpolation to all parameters
+    // Blend user interaction with audio targets
     Object.keys(this.targetValues).forEach(key => {
+      if (userInfluence > 0) {
+        // Blend user input with audio effects
+        this.targetValues[key] = this.lerp(
+          audioTargets[key], 
+          this.userInteraction.userValues[key], 
+          userInfluence, 
+          deltaTime
+        );
+      } else {
+        // Pure audio mode
+        this.targetValues[key] = audioTargets[key];
+      }
+      
+      // Apply ultra-smooth interpolation to final values
       this.currentValues[key] = this.lerp(
         this.currentValues[key], 
         this.targetValues[key], 

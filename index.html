@@ -46,37 +46,27 @@
     overscroll-behavior: none;
   }
   
-  /* Handle notch/safe areas on modern phones - but don't affect desktop */
-  @media (max-width: 768px) {
-    @supports (padding: env(safe-area-inset-top)) {
-      body {
-        padding-top: env(safe-area-inset-top);
-        padding-bottom: env(safe-area-inset-bottom);
-        padding-left: env(safe-area-inset-left);
-        padding-right: env(safe-area-inset-right);
-      }
-    }
-  }
-  
-  /* Audio controls container - centered at bottom */
+  /* Audio controls container - mobile first design */
   #audioControls {
     position: fixed;
-    bottom: 30px;
+    bottom: 20px;
     left: 50%;
     transform: translateX(-50%);
     z-index: 1000;
     display: flex;
-    gap: 15px;
+    gap: 20px;
     align-items: center;
+    /* Ensure buttons are accessible above audio bar */
+    padding-bottom: 5px;
   }
   
-  /* Base button styles */
+  /* Base button styles - mobile optimized */
   .audio-btn {
     background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    color: rgba(255, 255, 255, 0.5);
-    width: 40px;
-    height: 40px;
+    border: 2px solid rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.6);
+    width: 54px;
+    height: 54px;
     border-radius: 50%;
     cursor: pointer;
     transition: all 0.3s ease;
@@ -84,43 +74,50 @@
     align-items: center;
     justify-content: center;
     padding: 0;
+    /* Better touch targets for mobile */
+    -webkit-tap-highlight-color: transparent;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
   }
   
-  .audio-btn:hover {
-    background: rgba(255, 255, 255, 0.08);
+  .audio-btn:hover,
+  .audio-btn:active {
+    background: rgba(255, 255, 255, 0.1);
     border-color: rgba(255, 255, 255, 0.2);
-    color: rgba(255, 255, 255, 0.7);
+    color: rgba(255, 255, 255, 0.8);
+    transform: scale(1.05);
   }
   
   .audio-btn.active {
     color: rgba(255, 255, 255, 0.9);
-    background: rgba(255, 255, 255, 0.08);
-    box-shadow: 0 0 20px rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.3);
+    box-shadow: 0 0 20px rgba(255, 255, 255, 0.15);
     animation: gentleGlow 3s ease-in-out infinite;
   }
   
   @keyframes gentleGlow {
-    0%, 100% { box-shadow: 0 0 10px rgba(255, 255, 255, 0.1); }
-    50% { box-shadow: 0 0 25px rgba(255, 255, 255, 0.15); }
+    0%, 100% { box-shadow: 0 0 15px rgba(255, 255, 255, 0.1); }
+    50% { box-shadow: 0 0 30px rgba(255, 255, 255, 0.2); }
   }
   
   .audio-btn svg {
-    width: 20px;
-    height: 20px;
+    width: 24px;
+    height: 24px;
     fill: currentColor;
   }
   
   /* Play button specific styling */
   #playBtn.playing {
-    background: rgba(0, 255, 100, 0.08);
-    border-color: rgba(0, 255, 100, 0.2);
+    background: rgba(0, 255, 100, 0.1);
+    border-color: rgba(0, 255, 100, 0.3);
     color: rgba(0, 255, 100, 0.9);
     animation: playGlow 2s ease-in-out infinite;
   }
   
   @keyframes playGlow {
-    0%, 100% { box-shadow: 0 0 10px rgba(0, 255, 100, 0.2); }
-    50% { box-shadow: 0 0 25px rgba(0, 255, 100, 0.3); }
+    0%, 100% { box-shadow: 0 0 15px rgba(0, 255, 100, 0.2); }
+    50% { box-shadow: 0 0 35px rgba(0, 255, 100, 0.3); }
   }
   
   /* Audio level indicator - full width rainbow line at bottom */
@@ -129,11 +126,12 @@
     bottom: 0;
     left: 0;
     width: 100%;
-    height: 3px;
-    background: rgba(0, 0, 0, 0.5);
+    height: 4px;
+    background: rgba(0, 0, 0, 0.3);
     overflow: hidden;
     opacity: 0;
     transition: opacity 0.5s ease;
+    z-index: 999; /* Below controls */
   }
   
   #audioLevel.visible {
@@ -152,17 +150,102 @@
     transform-origin: left;
     transform: scaleX(0);
     transition: transform 0.3s cubic-bezier(0.4, 0.0, 0.2, 1);
+    box-shadow: 0 0 8px rgba(255, 255, 255, 0.3);
   }
   
-  /* Mobile adjustments */
+  /* Mobile optimizations */
   @media (max-width: 768px) {
+    /* Handle notch/safe areas on modern phones */
+    @supports (padding: env(safe-area-inset-bottom)) {
+      #audioControls {
+        bottom: calc(20px + env(safe-area-inset-bottom));
+        padding-left: env(safe-area-inset-left);
+        padding-right: env(safe-area-inset-right);
+      }
+    }
+    
+    /* Larger touch targets for mobile */
+    .audio-btn {
+      width: 58px;
+      height: 58px;
+      border-width: 2px;
+    }
+    
+    .audio-btn svg {
+      width: 26px;
+      height: 26px;
+    }
+    
+    /* Audio level more prominent on mobile */
+    #audioLevel {
+      height: 5px;
+    }
+    
+    /* Ensure canvas interaction works everywhere */
+    canvas {
+      touch-action: manipulation;
+    }
+  }
+  
+  /* Very small screens (phones in portrait) */
+  @media (max-width: 480px) and (max-height: 800px) {
     #audioControls {
-      bottom: calc(30px + env(safe-area-inset-bottom));
+      gap: 15px;
+      bottom: 15px;
+    }
+    
+    .audio-btn {
+      width: 52px;
+      height: 52px;
+    }
+    
+    .audio-btn svg {
+      width: 22px;
+      height: 22px;
+    }
+  }
+  
+  /* Landscape mobile */
+  @media (max-height: 500px) and (orientation: landscape) {
+    #audioControls {
+      bottom: 10px;
+      gap: 15px;
+    }
+    
+    .audio-btn {
+      width: 48px;
+      height: 48px;
+    }
+    
+    .audio-btn svg {
+      width: 20px;
+      height: 20px;
     }
     
     #audioLevel {
-      bottom: 0;
-      width: 100%;
+      height: 3px;
+    }
+  }
+  
+  /* Desktop enhancements */
+  @media (min-width: 769px) {
+    .audio-btn {
+      width: 48px;
+      height: 48px;
+      border-width: 1px;
+    }
+    
+    .audio-btn svg {
+      width: 22px;
+      height: 22px;
+    }
+    
+    .audio-btn:hover {
+      transform: scale(1.1);
+    }
+    
+    #audioLevel {
+      height: 3px;
     }
   }
 </style>
