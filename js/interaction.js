@@ -1,5 +1,6 @@
 import { parms } from './config.js';
-import Hammer from 'hammerjs';
+
+// Hammer.js is loaded globally via CDN
 
 let lastX = 0;
 let lastY = 0;

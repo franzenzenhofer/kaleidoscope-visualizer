@@ -1,12 +1,18 @@
-// Audio analysis module for microphone input and visualization
+// Audio analysis module for microphone input and audio file visualization
 export class AudioAnalyzer {
   constructor() {
     this.audioContext = null;
     this.analyser = null;
     this.microphone = null;
+    this.musicSource = null;
     this.dataArray = null;
     this.bufferLength = null;
     this.isActive = false;
+    this.isMicrophoneMode = false;
+    this.isMusicMode = false;
+    
+    // Audio elements
+    this.musicPlayer = null;
     
     // Audio metrics
     this.volume = 0;
@@ -54,25 +60,41 @@ export class AudioAnalyzer {
     return current + (target - current) * adjustedFactor;
   }
   
-  async start() {
+  // Initialize audio context and analyzer
+  async initAudioContext() {
+    if (this.audioContext) return true;
+    
     try {
-      // Get microphone access
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      
-      // Create audio context
       this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
       this.analyser = this.audioContext.createAnalyser();
       this.analyser.fftSize = 2048;
-      this.analyser.smoothingTimeConstant = 0.95; // Even more smoothing for ultra-relaxed response
+      this.analyser.smoothingTimeConstant = 0.95;
       
-      // Connect microphone to analyser
-      this.microphone = this.audioContext.createMediaStreamSource(stream);
-      this.microphone.connect(this.analyser);
-      
-      // Setup data array
       this.bufferLength = this.analyser.frequencyBinCount;
       this.dataArray = new Uint8Array(this.bufferLength);
       
+      return true;
+    } catch (error) {
+      console.error('Failed to create audio context:', error);
+      return false;
+    }
+  }
+  
+  // Start microphone input
+  async startMicrophone() {
+    try {
+      if (!await this.initAudioContext()) return false;
+      
+      // Stop any existing sources
+      this.stopAllSources();
+      
+      // Get microphone access
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      this.microphone = this.audioContext.createMediaStreamSource(stream);
+      this.microphone.connect(this.analyser);
+      
+      this.isMicrophoneMode = true;
+      this.isMusicMode = false;
       this.isActive = true;
       this.lastUpdateTime = performance.now();
       this.analyze();
@@ -84,11 +106,80 @@ export class AudioAnalyzer {
     }
   }
   
-  stop() {
+  // Start music file playback
+  async startMusic() {
+    try {
+      if (!await this.initAudioContext()) return false;
+      
+      // Stop any existing sources
+      this.stopAllSources();
+      
+      // Get music player element
+      this.musicPlayer = document.getElementById('musicPlayer');
+      if (!this.musicPlayer) {
+        console.error('Music player element not found');
+        return false;
+      }
+      
+      // Resume audio context if suspended (required for user interaction)
+      if (this.audioContext.state === 'suspended') {
+        await this.audioContext.resume();
+      }
+      
+      // Create media element source
+      this.musicSource = this.audioContext.createMediaElementSource(this.musicPlayer);
+      this.musicSource.connect(this.analyser);
+      this.musicSource.connect(this.audioContext.destination); // Connect to speakers
+      
+      // Ensure looping is enabled
+      this.musicPlayer.loop = true;
+      
+      // Add event listeners to ensure continuous playback
+      this.musicPlayer.addEventListener('ended', () => {
+        if (this.isMusicMode) {
+          this.musicPlayer.play();
+        }
+      });
+      
+      // Start playback
+      await this.musicPlayer.play();
+      
+      this.isMusicMode = true;
+      this.isMicrophoneMode = false;
+      this.isActive = true;
+      this.lastUpdateTime = performance.now();
+      this.analyze();
+      
+      return true;
+    } catch (error) {
+      console.error('Failed to start music playback:', error);
+      return false;
+    }
+  }
+  
+  // Stop all audio sources
+  stopAllSources() {
     if (this.microphone) {
       this.microphone.disconnect();
       this.microphone = null;
     }
+    
+    if (this.musicSource) {
+      this.musicSource.disconnect();
+      this.musicSource = null;
+    }
+    
+    if (this.musicPlayer && !this.musicPlayer.paused) {
+      this.musicPlayer.pause();
+    }
+    
+    this.isMicrophoneMode = false;
+    this.isMusicMode = false;
+  }
+  
+  // Stop audio analysis completely
+  stop() {
+    this.stopAllSources();
     
     if (this.audioContext) {
       this.audioContext.close();
@@ -96,6 +187,29 @@ export class AudioAnalyzer {
     }
     
     this.isActive = false;
+  }
+  
+  // Pause/resume music
+  toggleMusic() {
+    if (!this.musicPlayer) return false;
+    
+    try {
+      if (this.musicPlayer.paused) {
+        this.musicPlayer.play();
+        return true; // Playing
+      } else {
+        this.musicPlayer.pause();
+        return false; // Paused
+      }
+    } catch (error) {
+      console.error('Failed to toggle music:', error);
+      return null;
+    }
+  }
+  
+  // Check if music is playing
+  isMusicPlaying() {
+    return this.musicPlayer && !this.musicPlayer.paused;
   }
   
   analyze() {
@@ -203,7 +317,10 @@ export class AudioAnalyzer {
       treble: this.treble,
       beat: this.beatDetected,
       beatInterval: this.beatInterval,
-      isActive: this.isActive
+      isActive: this.isActive,
+      isMicrophoneMode: this.isMicrophoneMode,
+      isMusicMode: this.isMusicMode,
+      isMusicPlaying: this.isMusicPlaying()
     };
   }
 }

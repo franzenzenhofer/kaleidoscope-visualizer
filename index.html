@@ -58,13 +58,20 @@
     }
   }
   
-  /* Audio button - centered at bottom */
-  #audioBtn {
+  /* Audio controls container - centered at bottom */
+  #audioControls {
     position: fixed;
     bottom: 30px;
     left: 50%;
     transform: translateX(-50%);
     z-index: 1000;
+    display: flex;
+    gap: 15px;
+    align-items: center;
+  }
+  
+  /* Base button styles */
+  .audio-btn {
     background: rgba(255, 255, 255, 0.05);
     border: 1px solid rgba(255, 255, 255, 0.1);
     color: rgba(255, 255, 255, 0.5);
@@ -79,13 +86,13 @@
     padding: 0;
   }
   
-  #audioBtn:hover {
+  .audio-btn:hover {
     background: rgba(255, 255, 255, 0.08);
     border-color: rgba(255, 255, 255, 0.2);
     color: rgba(255, 255, 255, 0.7);
   }
   
-  #audioBtn.active {
+  .audio-btn.active {
     color: rgba(255, 255, 255, 0.9);
     background: rgba(255, 255, 255, 0.08);
     box-shadow: 0 0 20px rgba(255, 255, 255, 0.1);
@@ -97,10 +104,23 @@
     50% { box-shadow: 0 0 25px rgba(255, 255, 255, 0.15); }
   }
   
-  #audioBtn svg {
+  .audio-btn svg {
     width: 20px;
     height: 20px;
     fill: currentColor;
+  }
+  
+  /* Play button specific styling */
+  #playBtn.playing {
+    background: rgba(0, 255, 100, 0.08);
+    border-color: rgba(0, 255, 100, 0.2);
+    color: rgba(0, 255, 100, 0.9);
+    animation: playGlow 2s ease-in-out infinite;
+  }
+  
+  @keyframes playGlow {
+    0%, 100% { box-shadow: 0 0 10px rgba(0, 255, 100, 0.2); }
+    50% { box-shadow: 0 0 25px rgba(0, 255, 100, 0.3); }
   }
   
   /* Audio level indicator - full width rainbow line at bottom */
@@ -134,10 +154,9 @@
     transition: transform 0.3s cubic-bezier(0.4, 0.0, 0.2, 1);
   }
   
-  
   /* Mobile adjustments */
   @media (max-width: 768px) {
-    #audioBtn {
+    #audioControls {
       bottom: calc(30px + env(safe-area-inset-bottom));
     }
     
@@ -152,17 +171,34 @@
 <canvas id="c"></canvas>
 
 <!-- Audio Controls -->
-<button id="audioBtn" aria-label="Toggle Audio">
-  <svg viewBox="0 0 24 24">
-    <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.3-3c0 3-2.54 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c3.28-.48 6-3.3 6-6.72h-1.7z"/>
-  </svg>
-</button>
+<div id="audioControls">
+  <button id="playBtn" class="audio-btn" aria-label="Play/Pause Music">
+    <svg class="play-icon" viewBox="0 0 24 24">
+      <path d="M8 5v14l11-7z"/>
+    </svg>
+    <svg class="pause-icon" viewBox="0 0 24 24" style="display: none;">
+      <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>
+    </svg>
+  </button>
+  
+  <button id="audioBtn" class="audio-btn" aria-label="Toggle Microphone">
+    <svg viewBox="0 0 24 24">
+      <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.3-3c0 3-2.54 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c3.28-.48 6-3.3 6-6.72h-1.7z"/>
+    </svg>
+  </button>
+</div>
 
 <div id="audioLevel">
   <div class="bar"></div>
 </div>
 
+<!-- Hidden audio element for MP3 playback -->
+<audio id="musicPlayer" preload="auto" loop>
+  <source src="Dea_Fungorum_cut_fadeout.mp3" type="audio/mpeg">
+</audio>
 
+<!-- Load Hammer.js from CDN for touch gestures -->
+<script src="https://hammerjs.github.io/dist/hammer.min.js"></script>
 <script type="module" src="js/main.js"></script>
 </body>
 </html>
