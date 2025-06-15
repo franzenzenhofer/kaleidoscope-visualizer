@@ -5,9 +5,7 @@ export const defaultParms = {
   baseRadius: 0.4,       // Larger for touch-friendly visuals
   swirlSpeed: 0.15,      // Slower for better mobile control
   hueSpeed: 30,          // Calmer color transitions
-  sizeMod: 0.2,          // Better visibility on small screens
-  pulseSpeed: 0.5,       // Breathing effect
-  spiralTightness: 1     // How tight the spiral is
+  sizeMod: 0.2           // Better visibility on small screens
 };
 
 // Live parameters that change with physics

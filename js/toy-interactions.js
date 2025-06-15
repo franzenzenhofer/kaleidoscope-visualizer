@@ -37,53 +37,43 @@ export function setupToyInteractions(element) {
   hammer.get('pinch').recognizeWith(['rotate', 'pan']);
   hammer.get('rotate').recognizeWith(['pinch', 'pan']);
   
-  // ROTATE - Spin the kaleidoscope like a wheel
+  // ROTATE - Change swirl speed
   hammer.on('rotatestart', (e) => {
     gestureState.rotating = true;
-    gestureState.startRotation = physics.rotation;
-    physics.startInteraction();
+    gestureState.startRotation = parms.swirlSpeed;
+    physics.lastInteractionTime = Date.now();
   });
   
   hammer.on('rotate', (e) => {
-    physics.setRotation(gestureState.startRotation + e.rotation * Math.PI / 180);
-    
-    // Add some twist based on rotation speed
-    const rotationDelta = e.rotation - gestureState.lastRotation;
-    physics.setTwist(rotationDelta * 0.01);
-    gestureState.lastRotation = e.rotation;
+    const rotationNorm = e.rotation / 180; // -1 to 1
+    parms.swirlSpeed = Math.max(-0.5, Math.min(0.5, gestureState.startRotation + rotationNorm * 0.3));
   });
   
   hammer.on('rotateend', (e) => {
     gestureState.rotating = false;
-    physics.endInteraction();
-    // Add momentum
-    physics.addRotationImpulse(e.overallVelocity * 0.1);
+    physics.lastInteractionTime = Date.now();
   });
   
-  // PINCH - Zoom in/out changes pattern density
+  // PINCH - Change base radius
   hammer.on('pinchstart', (e) => {
     gestureState.pinching = true;
-    gestureState.startScale = physics.scale;
-    physics.startInteraction();
+    gestureState.startScale = parms.baseRadius;
+    physics.lastInteractionTime = Date.now();
   });
   
   hammer.on('pinch', (e) => {
-    physics.setScale(gestureState.startScale * e.scale);
-    physics.setSpread(e.scale);
-    
-    // Pinch also affects slice count dynamically
-    parms.slices = Math.round(defaultParms.slices * (2 - e.scale));
+    parms.baseRadius = Math.max(0.2, Math.min(0.6, gestureState.startScale * e.scale));
   });
   
   hammer.on('pinchend', () => {
     gestureState.pinching = false;
-    physics.endInteraction();
+    physics.lastInteractionTime = Date.now();
   });
   
-  // PAN - Drag to temporarily change parameters
+  // PAN - Drag to change parameters
   hammer.on('panstart', () => {
     gestureState.panning = true;
-    physics.startInteraction();
+    physics.lastInteractionTime = Date.now();
   });
   
   hammer.on('pan', (e) => {
@@ -91,100 +81,61 @@ export function setupToyInteractions(element) {
     const normX = e.deltaX / window.innerWidth;
     parms.swirlSpeed = defaultParms.swirlSpeed + normX * 0.5;
     
-    // Vertical pan affects pattern complexity
+    // Vertical pan affects slice count
     const normY = e.deltaY / window.innerHeight;
-    parms.circles = Math.round(defaultParms.circles + normY * 4);
-    
-    // Store velocity for momentum
-    gestureState.lastVelocityX = e.velocityX;
-    gestureState.lastVelocityY = e.velocityY;
+    parms.slices = Math.max(4, Math.min(24, Math.round(defaultParms.slices - normY * 12)));
   });
   
   hammer.on('panend', () => {
     gestureState.panning = false;
-    physics.endInteraction();
-    
-    // Add momentum to rotation based on pan velocity
-    physics.addRotationImpulse(gestureState.lastVelocityX * 0.05);
+    physics.lastInteractionTime = Date.now();
   });
   
-  // SWIPE - Quick flick to spin
+  // SWIPE - Change circle count
   hammer.on('swipe', (e) => {
-    const power = Math.sqrt(e.velocityX * e.velocityX + e.velocityY * e.velocityY);
+    physics.lastInteractionTime = Date.now();
     
-    // Stronger swipes create more spin
-    if (e.direction === Hammer.DIRECTION_LEFT || e.direction === Hammer.DIRECTION_RIGHT) {
-      physics.addRotationImpulse(e.velocityX * power * 0.2);
-    }
-    
-    // Vertical swipes affect scale
+    // Vertical swipes change circle count
     if (e.direction === Hammer.DIRECTION_UP) {
-      physics.addScaleImpulse(0.3);
       parms.circles = Math.min(12, parms.circles + 2);
     } else if (e.direction === Hammer.DIRECTION_DOWN) {
-      physics.addScaleImpulse(-0.3);
       parms.circles = Math.max(3, parms.circles - 2);
     }
     
-    // Swipe also creates a temporary burst effect
-    parms.hueSpeed = defaultParms.hueSpeed * 3;
-    setTimeout(() => {
-      parms.hueSpeed = defaultParms.hueSpeed;
-      parms.circles = defaultParms.circles;
-    }, 1000);
-  });
-  
-  // PRESS - Hold to see inside (changes pattern)
-  hammer.on('press', () => {
-    parms.baseRadius = defaultParms.baseRadius * 0.5;
-    parms.sizeMod = defaultParms.sizeMod * 2;
-    physics.setTwist(Math.PI / 4);
-  });
-  
-  hammer.on('pressup', () => {
-    // Spring back
-    physics.setTwist(0);
-  });
-  
-  // TAP - Pulse effect with edge detection
-  hammer.on('tap', (e) => {
-    const x = e.center.x / window.innerWidth;
-    const y = e.center.y / window.innerHeight;
-    
-    // Edge tap detection - creates different effects
-    const edgeThreshold = 0.15;
-    const isEdgeTap = x < edgeThreshold || x > (1 - edgeThreshold) || 
-                      y < edgeThreshold || y > (1 - edgeThreshold);
-    
-    if (isEdgeTap) {
-      // Edge taps create ripple effects
-      if (x < edgeThreshold) physics.addRotationImpulse(-0.5); // Left edge
-      if (x > (1 - edgeThreshold)) physics.addRotationImpulse(0.5); // Right edge
-      if (y < edgeThreshold) {
-        parms.slices = Math.min(24, parms.slices + 4); // Top edge
-        setTimeout(() => parms.slices = defaultParms.slices, 1000);
-      }
-      if (y > (1 - edgeThreshold)) {
-        parms.slices = Math.max(4, parms.slices - 4); // Bottom edge
-        setTimeout(() => parms.slices = defaultParms.slices, 1000);
-      }
-    } else {
-      // Center tap - normal pulse
-      parms.pulseSpeed = 2;
-      physics.addScaleImpulse(0.1);
-      
+    // Horizontal swipes change hue speed
+    if (e.direction === Hammer.DIRECTION_LEFT || e.direction === Hammer.DIRECTION_RIGHT) {
+      parms.hueSpeed = defaultParms.hueSpeed * 2;
       setTimeout(() => {
-        parms.pulseSpeed = defaultParms.pulseSpeed;
-      }, 500);
+        parms.hueSpeed = defaultParms.hueSpeed;
+      }, 2000);
     }
   });
   
-  // DOUBLE TAP - Reset with a spin
-  hammer.on('doubletap', () => {
-    physics.addRotationImpulse(2);
+  // PRESS - Hold to slow down
+  hammer.on('press', () => {
+    parms.swirlSpeed = defaultParms.swirlSpeed * 0.1;
+    parms.hueSpeed = defaultParms.hueSpeed * 0.5;
+    physics.lastInteractionTime = Date.now() + 10000; // Delay auto-return
+  });
+  
+  hammer.on('pressup', () => {
+    physics.lastInteractionTime = Date.now();
+  });
+  
+  // TAP - Change hue speed temporarily
+  hammer.on('tap', (e) => {
+    parms.hueSpeed = defaultParms.hueSpeed * 2;
+    physics.lastInteractionTime = Date.now();
+    
     setTimeout(() => {
-      Object.assign(parms, defaultParms);
+      parms.hueSpeed = defaultParms.hueSpeed;
     }, 1000);
+  });
+  
+  // DOUBLE TAP - Reset to defaults
+  hammer.on('doubletap', () => {
+    Object.assign(parms, defaultParms);
+    physics.lastInteractionTime = Date.now();
   });
   
   // Multi-touch for complex interactions
@@ -212,27 +163,7 @@ export function setupToyInteractions(element) {
 
 // Device orientation for subtle movement (if available)
 export function setupOrientationInteraction() {
-  if (window.DeviceOrientationEvent) {
-    let initialAlpha = null;
-    
-    window.addEventListener('deviceorientation', (e) => {
-      if (e.alpha === null) return;
-      
-      if (initialAlpha === null) {
-        initialAlpha = e.alpha;
-      }
-      
-      // Subtle rotation based on device tilt
-      const alphaDelta = (e.alpha - initialAlpha) / 360;
-      physics.targetRotation = alphaDelta * Math.PI * 0.5;
-      
-      // Beta (front-back tilt) affects spread
-      if (e.beta !== null) {
-        const betaNorm = Math.max(-1, Math.min(1, e.beta / 90));
-        physics.targetSpread = 1 + betaNorm * 0.2;
-      }
-    });
-  }
+  // Removed - keeping only gesture interactions
   
   // Shake detection
   if (window.DeviceMotionEvent) {
@@ -270,30 +201,18 @@ export function setupOrientationInteraction() {
 export function updateToyPhysics() {
   physics.update();
   
-  // Apply physics to rendering parameters
-  parms.baseRadius = defaultParms.baseRadius * physics.scale * physics.spread;
-  parms.spiralTightness = 1 + physics.twist;
-  
-  // Subtle breathing effect when idle
+  // Only update parameters based on physics, not visualization
   const time = Date.now() * 0.001;
-  const idleBreathing = Math.sin(time * parms.pulseSpeed) * 0.05 + 1;
-  parms.sizeMod = defaultParms.sizeMod * idleBreathing * physics.scale;
   
-  // Organic drift when idle
+  // Return parameters to defaults gradually
   const timeSinceInteraction = Date.now() - physics.lastInteractionTime;
-  if (timeSinceInteraction > 5000) {
-    // After 5 seconds, start gentle organic movement
-    const drift = timeSinceInteraction / 10000;
-    parms.swirlSpeed = defaultParms.swirlSpeed + Math.sin(time * 0.1) * 0.05 * drift;
-    parms.hueSpeed = defaultParms.hueSpeed + Math.cos(time * 0.15) * 5 * drift;
-    
-    // Very subtle automatic rotation
-    physics.targetRotation = Math.sin(time * 0.05) * 0.1 * drift;
-  }
-  
-  // Edge detection - bounce at extremes
-  if (Math.abs(physics.rotation) > Math.PI * 4) {
-    physics.rotationVelocity *= -0.5;
-    physics.rotation = Math.sign(physics.rotation) * Math.PI * 4;
+  if (timeSinceInteraction > 2000) {
+    const returnSpeed = 0.05;
+    parms.swirlSpeed += (defaultParms.swirlSpeed - parms.swirlSpeed) * returnSpeed;
+    parms.hueSpeed += (defaultParms.hueSpeed - parms.hueSpeed) * returnSpeed;
+    parms.circles += (defaultParms.circles - parms.circles) * returnSpeed;
+    parms.slices = Math.round(parms.slices + (defaultParms.slices - parms.slices) * returnSpeed);
+    parms.baseRadius += (defaultParms.baseRadius - parms.baseRadius) * returnSpeed;
+    parms.sizeMod += (defaultParms.sizeMod - parms.sizeMod) * returnSpeed;
   }
 }
