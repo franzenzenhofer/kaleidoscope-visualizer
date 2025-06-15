@@ -1,5 +1,5 @@
 import { resize, canvas, setupMobileViewport } from './canvas.js';
-import { setupTouchInteraction, setupDesktopInteraction } from './interaction.js';
+import { setupToyInteractions, setupOrientationInteraction } from './toy-interactions.js';
 import { draw } from './renderer.js';
 import { enhanceForDesktop } from './config.js';
 
@@ -9,12 +9,12 @@ import { enhanceForDesktop } from './config.js';
   setupMobileViewport();
   resize();
   
-  // 2. Touch interactions are primary
-  setupTouchInteraction(canvas);
+  // 2. Rich toy interactions
+  setupToyInteractions(canvas);
+  setupOrientationInteraction();
   
   // 3. Enhance for desktop if applicable
   enhanceForDesktop();
-  setupDesktopInteraction();
   
   // 4. Critical mobile optimizations
   // Prevent ALL scrolling/bouncing and unwanted gestures
