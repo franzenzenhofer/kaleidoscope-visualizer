@@ -1,33 +1,33 @@
-// MOBILE FIRST - Default parameters optimized for mobile
+// IMPROVED MOBILE CONFIGURATION - More desktop-like quality
 export const parms = {
-  slices: 8,             // Optimized for mobile performance
-  circles: 6,            // Fewer circles for smooth 60fps on phones
-  baseRadius: 0.4,       // Larger for touch-friendly visuals
-  swirlSpeed: 0.15,      // Slower for better mobile control
-  hueSpeed: 30,          // Calmer color transitions
-  sizeMod: 0.2           // Better visibility on small screens
+  slices: 10,            // Increased from 8 - more detail like desktop
+  circles: 7,            // Increased from 6 - richer patterns
+  baseRadius: 0.35,      // Decreased from 0.4 - more elements fit
+  swirlSpeed: 0.2,       // Increased from 0.15 - more dynamic
+  hueSpeed: 35,          // Slightly increased for better color flow
+  sizeMod: 0.18          // Decreased from 0.2 - finer elements
 };
 
 // Store original defaults for reset functionality
 export const defaultParms = {
-  slices: 8,
-  circles: 6,
-  baseRadius: 0.4,
-  swirlSpeed: 0.15,
-  hueSpeed: 30,
-  sizeMod: 0.2
+  slices: 10,
+  circles: 7,
+  baseRadius: 0.35,
+  swirlSpeed: 0.2,
+  hueSpeed: 35,
+  sizeMod: 0.18
 };
 
-// Desktop enhancements for larger screens
+// Desktop enhancements for larger screens - now closer to mobile
 export function enhanceForDesktop() {
   const isDesktop = window.matchMedia('(min-width: 769px) and (pointer: fine)').matches;
   
   if (isDesktop) {
-    parms.slices = 12;
-    parms.circles = 8;
-    parms.baseRadius = 0.35;
-    parms.swirlSpeed = 0.25;
-    parms.hueSpeed = 40;
-    parms.sizeMod = 0.18;
+    parms.slices = 14;         // Increased detail for desktop
+    parms.circles = 9;         // More complexity
+    parms.baseRadius = 0.32;   // Slightly smaller for more elements
+    parms.swirlSpeed = 0.25;   // Smooth motion
+    parms.hueSpeed = 40;       // Rich color transitions
+    parms.sizeMod = 0.16;      // Fine detail
   }
 }

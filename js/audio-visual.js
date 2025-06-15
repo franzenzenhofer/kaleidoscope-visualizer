@@ -27,9 +27,10 @@ export class AudioVisualMapper {
       hueSmoothing: 0.998,       // Increased from 0.995
       parameterSmoothing: 0.98,  // New: general parameter smoothing
       
-      // Interaction blending - how much user input vs audio
-      userInteractionWeight: 0.7,  // 70% user input, 30% audio when interacting
+      // Interaction blending - USER DOMINANCE when interacting
+      userInteractionWeight: 0.9,  // 90% user input, 10% audio when interacting
       audioOnlyWeight: 1.0,        // 100% audio when no user interaction
+      userFullControlWeight: 1.0,  // 100% user when audio is disabled
       
       // Limits for controlled contraction
       maxRotationSpeed: 0.15,
@@ -68,7 +69,7 @@ export class AudioVisualMapper {
       lastInteractionTime: 0,
       userValues: { ...this.targetValues },
       interactionDecay: 0.98,  // How quickly user interaction fades
-      interactionThreshold: 2000  // ms after which interaction is considered over
+      interactionThreshold: 1500  // Reduced from 2000ms - faster handoff to audio
     };
     
     // Base values to return to
@@ -111,9 +112,9 @@ export class AudioVisualMapper {
       this.userInteraction.isActive = false;
     }
     
-    // Gradually decay user interaction influence
+    // USER DOMINANT: Gradually decay user interaction influence but keep it high
     if (this.userInteraction.isActive) {
-      return Math.max(0.3, 1 - (timeSinceInteraction / this.userInteraction.interactionThreshold));
+      return Math.max(0.5, 1 - (timeSinceInteraction / this.userInteraction.interactionThreshold));
     }
     
     return 0;
@@ -134,12 +135,16 @@ export class AudioVisualMapper {
   
   stop() {
     this.isActive = false;
-    // Smoothly return to base values
-    this.returnToBase();
+    // When audio is disabled, user gets 100% control immediately
+    this.userInteraction.isActive = false;
+    // Don't return to base - keep current user values
   }
   
   update() {
-    if (!this.isActive || !this.audio.isActive) return;
+    // If audio is not active, user has 100% control - don't interfere
+    if (!this.isActive || !this.audio.isActive) {
+      return;
+    }
     
     const currentTime = performance.now();
     const deltaTime = currentTime - this.lastUpdateTime;
@@ -239,18 +244,18 @@ export class AudioVisualMapper {
       audioTargets.slices = Math.max(4, Math.min(12, this.baseValues.slices + variation));
     }
     
-    // Blend user interaction with audio targets
+    // USER DOMINANT BLENDING: Blend user interaction with audio targets
     Object.keys(this.targetValues).forEach(key => {
       if (userInfluence > 0) {
-        // Blend user input with audio effects
+        // USER DOMINATES: 90% user input when interacting
         this.targetValues[key] = this.lerp(
           audioTargets[key], 
           this.userInteraction.userValues[key], 
-          userInfluence, 
+          this.config.userInteractionWeight, // 90% user dominance
           deltaTime
         );
       } else {
-        // Pure audio mode
+        // Pure audio mode when no user interaction
         this.targetValues[key] = audioTargets[key];
       }
       
@@ -262,8 +267,10 @@ export class AudioVisualMapper {
         deltaTime
       );
       
-      // Apply the smoothed values to the actual parameters
-      parms[key] = this.currentValues[key];
+      // Apply the smoothed values to the actual parameters ONLY if audio is active
+      if (this.isActive && this.audio.isActive) {
+        parms[key] = this.currentValues[key];
+      }
     });
   }
   
@@ -295,6 +302,12 @@ export class AudioVisualMapper {
   
   // Special effects with ultra-smooth transitions
   applySpecialEffects(metrics) {
+    // Only apply effects if audio is active and no strong user interaction
+    if (!this.isActive || !this.audio.isActive) return;
+    
+    const userInfluence = this.updateUserInteraction();
+    if (userInfluence > 0.7) return; // Don't interfere with strong user control
+    
     const currentTime = performance.now();
     const deltaTime = currentTime - this.lastUpdateTime;
     

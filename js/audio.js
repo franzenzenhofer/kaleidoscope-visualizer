@@ -80,7 +80,7 @@ export class AudioAnalyzer {
     }
   }
   
-  // Start microphone input
+  // Start microphone input with improved mobile support
   async startMicrophone() {
     try {
       if (!await this.initAudioContext()) return false;
@@ -88,10 +88,62 @@ export class AudioAnalyzer {
       // Stop any existing sources
       this.stopAllSources();
       
-      // Get microphone access
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // Check if we have microphone permission
+      if (navigator.permissions) {
+        try {
+          const permission = await navigator.permissions.query({ name: 'microphone' });
+          if (permission.state === 'denied') {
+            alert('Microphone access denied. Please enable it in your browser settings and try again.');
+            return false;
+          }
+        } catch (e) {
+          // Permissions API not supported, continue with getUserMedia
+          console.log('Permissions API not supported, continuing...');
+        }
+      }
+      
+      // Request microphone access with mobile-optimized constraints
+      const constraints = {
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+          // Mobile-specific optimizations
+          sampleRate: 44100,
+          channelCount: 1
+        }
+      };
+      
+      let stream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia(constraints);
+      } catch (error) {
+        // Fallback for older browsers or stricter mobile policies
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        } catch (fallbackError) {
+          console.error('Microphone access failed:', fallbackError);
+          
+          // Provide user-friendly error messages
+          if (fallbackError.name === 'NotAllowedError') {
+            alert('🎤 Microphone access denied. Please:\n\n1. Refresh the page\n2. Click "Allow" when prompted\n3. Check your browser settings if needed');
+          } else if (fallbackError.name === 'NotFoundError') {
+            alert('🎤 No microphone found. Please check your device has a working microphone.');
+          } else if (fallbackError.name === 'NotReadableError') {
+            alert('🎤 Microphone is busy or not available. Please close other apps using the microphone and try again.');
+          } else {
+            alert('🎤 Could not access microphone. Please check your device settings and try again.');
+          }
+          return false;
+        }
+      }
+      
+      // Create audio source and connect
       this.microphone = this.audioContext.createMediaStreamSource(stream);
       this.microphone.connect(this.analyser);
+      
+      // Store the stream for cleanup
+      this.microphoneStream = stream;
       
       this.isMicrophoneMode = true;
       this.isMusicMode = false;
@@ -102,6 +154,7 @@ export class AudioAnalyzer {
       return true;
     } catch (error) {
       console.error('Failed to access microphone:', error);
+      alert('🎤 Microphone setup failed. Please refresh the page and try again.');
       return false;
     }
   }
@@ -162,6 +215,12 @@ export class AudioAnalyzer {
     if (this.microphone) {
       this.microphone.disconnect();
       this.microphone = null;
+    }
+    
+    // Properly close microphone stream to release camera/mic access
+    if (this.microphoneStream) {
+      this.microphoneStream.getTracks().forEach(track => track.stop());
+      this.microphoneStream = null;
     }
     
     if (this.musicSource) {
