@@ -104,8 +104,8 @@ export function setupHammerGestures(element, audioVisualMapper = null) {
       physics.velocityHistory.shift();
     }
     
-    // Apply immediate rotation based on gesture
-    physics.rotationVelocity = angularVelocity * 0.15;
+    // SMOOTH: Gentle rotation based on gesture
+    physics.rotationVelocity = angularVelocity * 0.05; // Much gentler
     
     // Also handle linear controls for other parameters
     const deltaX = event.center.x - lastX;
@@ -143,10 +143,10 @@ export function setupHammerGestures(element, audioVisualMapper = null) {
   });
   
   hammer.on('panend', (event) => {
-    // Calculate average velocity for momentum
+    // SMOOTH: Very gentle momentum
     if (physics.velocityHistory.length > 0) {
       const avgVelocity = physics.velocityHistory.reduce((a, b) => a + b, 0) / physics.velocityHistory.length;
-      physics.rotationVelocity = avgVelocity * 0.2; // Scale down for control
+      physics.rotationVelocity = avgVelocity * 0.05; // Much gentler momentum
     }
   });
   
@@ -155,16 +155,17 @@ export function setupHammerGestures(element, audioVisualMapper = null) {
     // Swipe velocity determines impact strength
     const velocity = Math.sqrt(event.velocityX * event.velocityX + event.velocityY * event.velocityY);
     
-    // INTUITIVE: Horizontal swipes control rotation
+    // SMOOTH: Horizontal swipes control rotation gently
     if (Math.abs(event.velocityX) > Math.abs(event.velocityY)) {
       // Swipe right = rotate clockwise, swipe left = rotate counter-clockwise
       const direction = event.velocityX > 0 ? 1 : -1;
-      physics.rotationVelocity = direction * velocity * 1.5;
+      physics.rotationVelocity = direction * velocity * 0.5; // Gentler
       
-      // Instant speed change for immediate feedback
-      const newSwirlSpeed = parms.swirlSpeed + (direction * velocity * 0.2);
-      parms.swirlSpeed = Math.max(-2, Math.min(2, newSwirlSpeed));
-      notifyUserInteraction('swirlSpeed', newSwirlSpeed);
+      // Smooth speed change
+      const targetSpeed = parms.swirlSpeed + (direction * velocity * 0.1);
+      const newSwirlSpeed = Math.max(-0.8, Math.min(0.8, targetSpeed));
+      parms.swirlSpeed = parms.swirlSpeed * 0.7 + newSwirlSpeed * 0.3; // Smooth blend
+      notifyUserInteraction('swirlSpeed', parms.swirlSpeed);
     }
     
     // INTUITIVE: Vertical swipes control size/radius
@@ -226,13 +227,14 @@ export function setupHammerGestures(element, audioVisualMapper = null) {
     const rotationDirection = event.rotation > 0 ? 1 : -1;
     const rotationSpeed = Math.abs(event.rotation) * 0.01;
     
-    // Set swirl speed based on rotation
-    const newSwirlSpeed = parms.swirlSpeed + (rotationDirection * rotationSpeed);
-    parms.swirlSpeed = Math.max(-2, Math.min(2, newSwirlSpeed));
-    notifyUserInteraction('swirlSpeed', newSwirlSpeed);
+    // SMOOTH: Set swirl speed based on rotation with interpolation
+    const targetSpeed = parms.swirlSpeed + (rotationDirection * rotationSpeed * 0.5);
+    const clampedSpeed = Math.max(-0.8, Math.min(0.8, targetSpeed));
+    parms.swirlSpeed = parms.swirlSpeed * 0.8 + clampedSpeed * 0.2; // Smooth blend
+    notifyUserInteraction('swirlSpeed', parms.swirlSpeed);
     
-    // Add momentum to physics
-    physics.rotationVelocity = rotationDirection * rotationSpeed * 10;
+    // Gentle momentum
+    physics.rotationVelocity = rotationDirection * rotationSpeed * 2; // Much less aggressive
   });
   
   // Double tap for complexity toggle
@@ -291,38 +293,35 @@ export function setupHammerGestures(element, audioVisualMapper = null) {
 
 // Update physics for toy-like motion
 export function updateToyPhysics(deltaTime) {
-  // Apply rotational velocity with momentum
+  // SMOOTH: Apply rotational velocity with heavy smoothing
   if (Math.abs(physics.rotationVelocity) > 0.001) {
-    // FIXED: Cap the swirl speed to prevent infinite accumulation
     const defaultSpeed = 0.2; // Base speed to gravitate towards
-    const maxDeviation = 1.5; // Maximum speed allowed
+    const maxSpeed = 0.8; // Lower maximum for smoother motion
+    const minSpeed = -0.8;
     
-    // Calculate new speed with limits
-    let newSwirlSpeed = parms.swirlSpeed + physics.rotationVelocity * deltaTime * 0.001;
+    // Much gentler speed application
+    let deltaSpeed = physics.rotationVelocity * deltaTime * 0.0003; // 3x slower
+    let targetSpeed = parms.swirlSpeed + deltaSpeed;
     
-    // Clamp to reasonable bounds
-    newSwirlSpeed = Math.max(-maxDeviation, Math.min(maxDeviation, newSwirlSpeed));
+    // Smooth clamping
+    targetSpeed = Math.max(minSpeed, Math.min(maxSpeed, targetSpeed));
     
-    // Gradually pull back to default when no interaction
-    if (Math.abs(physics.rotationVelocity) < 0.1) {
-      newSwirlSpeed = newSwirlSpeed * 0.98 + defaultSpeed * 0.02;
-    }
+    // ULTRA SMOOTH: Heavy interpolation
+    parms.swirlSpeed = parms.swirlSpeed * 0.95 + targetSpeed * 0.05;
+    notifyUserInteraction('swirlSpeed', parms.swirlSpeed);
     
-    parms.swirlSpeed = newSwirlSpeed;
-    notifyUserInteraction('swirlSpeed', newSwirlSpeed);
-    
-    // Apply friction
-    physics.rotationVelocity *= physics.rotationFriction;
+    // Stronger friction for quicker stop
+    physics.rotationVelocity *= 0.98;
     
     // Stop when very slow
-    if (Math.abs(physics.rotationVelocity) < 0.001) {
+    if (Math.abs(physics.rotationVelocity) < 0.01) {
       physics.rotationVelocity = 0;
     }
   } else {
-    // When no velocity, slowly return to default speed
+    // Smooth return to default
     const defaultSpeed = 0.2;
     if (Math.abs(parms.swirlSpeed - defaultSpeed) > 0.01) {
-      parms.swirlSpeed = parms.swirlSpeed * 0.99 + defaultSpeed * 0.01;
+      parms.swirlSpeed = parms.swirlSpeed * 0.97 + defaultSpeed * 0.03;
     }
   }
   

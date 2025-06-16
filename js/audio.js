@@ -162,7 +162,7 @@ export class AudioAnalyzer {
     }
   }
   
-  // Start music file playback
+  // Start music file playback with retry logic
   async startMusic() {
     try {
       if (!await this.initAudioContext()) return false;
@@ -182,31 +182,107 @@ export class AudioAnalyzer {
         await this.audioContext.resume();
       }
       
-      // Create media element source
-      this.musicSource = this.audioContext.createMediaElementSource(this.musicPlayer);
-      this.musicSource.connect(this.analyser);
-      this.musicSource.connect(this.audioContext.destination); // Connect to speakers
+      // Implement retry logic for audio loading
+      const maxRetries = 5;
+      const retryDelays = [100, 500, 1000, 2000, 3000]; // Progressive delays
+      let lastError = null;
       
-      // Ensure looping is enabled
-      this.musicPlayer.loop = true;
-      
-      // Add event listeners to ensure continuous playback
-      this.musicPlayer.addEventListener('ended', () => {
-        if (this.isMusicMode) {
-          this.musicPlayer.play();
+      for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        try {
+          // Force reload the audio source
+          if (attempt > 0) {
+            console.log(`🎵 Retry attempt ${attempt}/${maxRetries} to load audio...`);
+            this.musicPlayer.load(); // Force reload
+            
+            // Wait before retry
+            if (attempt < retryDelays.length) {
+              await new Promise(resolve => setTimeout(resolve, retryDelays[attempt - 1]));
+            }
+          }
+          
+          // Check if audio is ready
+          if (this.musicPlayer.readyState < 2) { // HAVE_CURRENT_DATA
+            // Try to load the audio
+            await new Promise((resolve, reject) => {
+              const loadTimeout = setTimeout(() => {
+                reject(new Error('Audio load timeout'));
+              }, 5000); // 5 second timeout per attempt
+              
+              const handleCanPlay = () => {
+                clearTimeout(loadTimeout);
+                cleanup();
+                resolve();
+              };
+              
+              const handleError = (e) => {
+                clearTimeout(loadTimeout);
+                cleanup();
+                reject(e);
+              };
+              
+              const cleanup = () => {
+                this.musicPlayer.removeEventListener('canplay', handleCanPlay);
+                this.musicPlayer.removeEventListener('error', handleError);
+              };
+              
+              this.musicPlayer.addEventListener('canplay', handleCanPlay, { once: true });
+              this.musicPlayer.addEventListener('error', handleError, { once: true });
+              
+              // Trigger load
+              this.musicPlayer.load();
+            });
+          }
+          
+          // Create media element source only once
+          if (!this.musicSource) {
+            this.musicSource = this.audioContext.createMediaElementSource(this.musicPlayer);
+            this.musicSource.connect(this.analyser);
+            this.musicSource.connect(this.audioContext.destination);
+          }
+          
+          // Ensure looping is enabled
+          this.musicPlayer.loop = true;
+          
+          // Add event listeners to ensure continuous playback
+          this.musicPlayer.addEventListener('ended', () => {
+            if (this.isMusicMode) {
+              this.musicPlayer.play();
+            }
+          });
+          
+          // Try to start playback
+          await this.musicPlayer.play();
+          
+          // Success! Audio loaded and playing
+          console.log('🎵 Audio loaded successfully');
+          this.isMusicMode = true;
+          this.isMicrophoneMode = false;
+          this.isActive = true;
+          this.lastUpdateTime = performance.now();
+          this.analyze();
+          
+          return true;
+          
+        } catch (error) {
+          lastError = error;
+          console.warn(`Audio load attempt ${attempt + 1} failed:`, error.message);
+          
+          // Clean up failed attempt
+          if (this.musicSource) {
+            this.musicSource.disconnect();
+            this.musicSource = null;
+          }
         }
-      });
+      }
       
-      // Start playback
-      await this.musicPlayer.play();
+      // All retries failed - show error overlay
+      console.error('🎵 Audio loading failed after all retries:', lastError);
+      const errorOverlay = document.getElementById('audioErrorOverlay');
+      if (errorOverlay) {
+        errorOverlay.style.display = 'flex';
+      }
       
-      this.isMusicMode = true;
-      this.isMicrophoneMode = false;
-      this.isActive = true;
-      this.lastUpdateTime = performance.now();
-      this.analyze();
-      
-      return true;
+      return false;
     } catch (error) {
       console.error('Failed to start music playback:', error);
       return false;
