@@ -275,12 +275,9 @@ export class AudioAnalyzer {
         }
       }
       
-      // All retries failed - show error overlay
+      // All retries failed - but don't show overlay, just continue without audio
       console.error('🎵 Audio loading failed after all retries:', lastError);
-      const errorOverlay = document.getElementById('audioErrorOverlay');
-      if (errorOverlay) {
-        errorOverlay.style.display = 'flex';
-      }
+      console.log('🎨 Continuing without audio - visualizer will work with user interactions only');
       
       return false;
     } catch (error) {
