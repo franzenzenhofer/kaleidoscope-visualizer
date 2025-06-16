@@ -19,7 +19,9 @@ const physics = {
   shakeDecay: 0.9,
   lastShakeTime: 0,
   pulsePhase: 0,
-  pulseSpeed: 0
+  pulseSpeed: 0,
+  lastRotation: 0, // For tracking rotation gesture
+  originalSpeed: null // For shake effect
 };
 
 // Helper function to notify audio visual of user interaction
@@ -68,14 +70,14 @@ export function setupHammerGestures(element, audioVisualMapper = null) {
     ]
   });
   
-  // Handle pan gestures with velocity tracking
+  // Handle pan gestures - CIRCULAR MOTION like iPod wheel
   hammer.on('panstart', (event) => {
     lastX = event.center.x;
     lastY = event.center.y;
     physics.velocityHistory = [];
     physics.lastRotationTime = Date.now();
     
-    // Calculate starting angle for circular motion
+    // Calculate starting angle from center
     const centerX = window.innerWidth / 2;
     const centerY = window.innerHeight / 2;
     physics.lastRotationAngle = Math.atan2(event.center.y - centerY, event.center.x - centerX);
@@ -85,7 +87,7 @@ export function setupHammerGestures(element, audioVisualMapper = null) {
     const currentTime = Date.now();
     const deltaTime = Math.max(1, currentTime - physics.lastRotationTime);
     
-    // Calculate circular motion
+    // PHYSICAL OBJECT: Track circular motion around center
     const centerX = window.innerWidth / 2;
     const centerY = window.innerHeight / 2;
     const currentAngle = Math.atan2(event.center.y - centerY, event.center.x - centerX);
@@ -95,45 +97,37 @@ export function setupHammerGestures(element, audioVisualMapper = null) {
     if (angleDelta > Math.PI) angleDelta -= 2 * Math.PI;
     if (angleDelta < -Math.PI) angleDelta += 2 * Math.PI;
     
-    // Calculate angular velocity
-    const angularVelocity = angleDelta / deltaTime * 1000; // rad/s
-    
-    // Store velocity history for momentum calculation
-    physics.velocityHistory.push(angularVelocity);
-    if (physics.velocityHistory.length > physics.maxVelocityHistory) {
-      physics.velocityHistory.shift();
+    // INTUITIVE: Positive angle = clockwise rotation
+    if (Math.abs(angleDelta) > 0.01) { // Only if significant movement
+      // Direct mapping: finger moves clockwise = visual rotates clockwise
+      const rotationSpeed = angleDelta * 2; // Amplify for responsiveness
+      parms.swirlSpeed += rotationSpeed;
+      parms.swirlSpeed = Math.max(-1, Math.min(1, parms.swirlSpeed));
+      notifyUserInteraction('swirlSpeed', parms.swirlSpeed);
+      
+      // Store for momentum
+      physics.velocityHistory.push(angleDelta * 100);
+      if (physics.velocityHistory.length > physics.maxVelocityHistory) {
+        physics.velocityHistory.shift();
+      }
     }
     
-    // SMOOTH: Gentle rotation based on gesture
-    physics.rotationVelocity = angularVelocity * 0.05; // Much gentler
-    
-    // Also handle linear controls for other parameters
+    // LINEAR MOTION: Up/down for size, left/right for complexity
     const deltaX = event.center.x - lastX;
     const deltaY = event.center.y - lastY;
     
-    // IMPACTFUL: Both horizontal and vertical movements have strong effects
-    // Horizontal movement = rotation speed AND size
-    if (Math.abs(deltaX) > 2) {
-      const newSwirlSpeed = Math.max(0, Math.min(2.0, parms.swirlSpeed + deltaX * 0.005));
-      parms.swirlSpeed = newSwirlSpeed;
-      notifyUserInteraction('swirlSpeed', newSwirlSpeed);
-      
-      // Horizontal also affects size slightly for visual feedback
-      const newSizeMod = Math.max(0.05, Math.min(0.5, parms.sizeMod + deltaX * 0.0005));
-      parms.sizeMod = newSizeMod;
-      notifyUserInteraction('sizeMod', newSizeMod);
-    }
-    
-    // Vertical movement = complexity AND base radius
+    // PHYSICAL: Vertical movement = SIZE (like stretching/squashing)
     if (Math.abs(deltaY) > 2) {
-      const newSlices = Math.max(4, Math.min(24, Math.round(parms.slices - deltaY * 0.05))); // 2.5x stronger
-      parms.slices = newSlices;
-      notifyUserInteraction('slices', newSlices);
-      
-      // Vertical also affects base radius for dramatic size changes
-      const newBaseRadius = Math.max(0.1, Math.min(0.6, parms.baseRadius - deltaY * 0.001));
+      // Moving UP = BIGGER, moving DOWN = SMALLER
+      const sizeChange = -deltaY * 0.002; // Negative because up is negative Y
+      const newBaseRadius = Math.max(0.1, Math.min(0.6, parms.baseRadius + sizeChange));
       parms.baseRadius = newBaseRadius;
       notifyUserInteraction('baseRadius', newBaseRadius);
+      
+      // Also adjust element size
+      const newSizeMod = Math.max(0.05, Math.min(0.5, parms.sizeMod + sizeChange * 0.5));
+      parms.sizeMod = newSizeMod;
+      notifyUserInteraction('sizeMod', newSizeMod);
     }
     
     lastX = event.center.x;
@@ -150,50 +144,49 @@ export function setupHammerGestures(element, audioVisualMapper = null) {
     }
   });
   
-  // Handle swipe for INTUITIVE transformations
+  // Handle swipe for PHYSICAL transformations
   hammer.on('swipe', (event) => {
-    // Swipe velocity determines impact strength
     const velocity = Math.sqrt(event.velocityX * event.velocityX + event.velocityY * event.velocityY);
     
-    // SMOOTH: Horizontal swipes control rotation gently
-    if (Math.abs(event.velocityX) > Math.abs(event.velocityY)) {
-      // Swipe right = rotate clockwise, swipe left = rotate counter-clockwise
-      const direction = event.velocityX > 0 ? 1 : -1;
-      physics.rotationVelocity = direction * velocity * 0.5; // Gentler
-      
-      // Smooth speed change
-      const targetSpeed = parms.swirlSpeed + (direction * velocity * 0.1);
-      const newSwirlSpeed = Math.max(-0.8, Math.min(0.8, targetSpeed));
-      parms.swirlSpeed = parms.swirlSpeed * 0.7 + newSwirlSpeed * 0.3; // Smooth blend
-      notifyUserInteraction('swirlSpeed', parms.swirlSpeed);
+    // PHYSICAL: Vertical swipes = SIZE changes (like pulling/pushing)
+    if (Math.abs(event.velocityY) > Math.abs(event.velocityX)) {
+      if (event.velocityY < 0) { // Swipe UP = EXPAND
+        // Dramatic expansion
+        const newBaseRadius = Math.min(0.6, parms.baseRadius * 1.4);
+        parms.baseRadius = newBaseRadius;
+        notifyUserInteraction('baseRadius', newBaseRadius);
+        
+        const newSizeMod = Math.min(0.5, parms.sizeMod * 1.3);
+        parms.sizeMod = newSizeMod;
+        notifyUserInteraction('sizeMod', newSizeMod);
+        
+        // Add bounce effect
+        physics.pulseSpeed = velocity * 0.8;
+      } else { // Swipe DOWN = CONTRACT
+        // Dramatic contraction
+        const newBaseRadius = Math.max(0.1, parms.baseRadius * 0.6);
+        parms.baseRadius = newBaseRadius;
+        notifyUserInteraction('baseRadius', newBaseRadius);
+        
+        const newSizeMod = Math.max(0.05, parms.sizeMod * 0.7);
+        parms.sizeMod = newSizeMod;
+        notifyUserInteraction('sizeMod', newSizeMod);
+        
+        // Add squeeze effect
+        physics.pulseSpeed = velocity * 0.8;
+      }
     }
     
-    // INTUITIVE: Vertical swipes control size/radius
-    if (Math.abs(event.velocityY) > Math.abs(event.velocityX)) {
-      if (event.velocityY < 0) { // Swipe UP = BIGGER radius
-        // Expand base radius
-        const newBaseRadius = Math.min(0.6, parms.baseRadius * 1.3);
-        parms.baseRadius = newBaseRadius;
-        notifyUserInteraction('baseRadius', newBaseRadius);
-        
-        // Also increase element size
-        const newSizeMod = Math.min(0.5, parms.sizeMod * 1.2);
-        parms.sizeMod = newSizeMod;
-        notifyUserInteraction('sizeMod', newSizeMod);
-      } else { // Swipe DOWN = SMALLER radius
-        // Contract base radius
-        const newBaseRadius = Math.max(0.1, parms.baseRadius * 0.7);
-        parms.baseRadius = newBaseRadius;
-        notifyUserInteraction('baseRadius', newBaseRadius);
-        
-        // Also decrease element size
-        const newSizeMod = Math.max(0.05, parms.sizeMod * 0.8);
-        parms.sizeMod = newSizeMod;
-        notifyUserInteraction('sizeMod', newSizeMod);
-      }
+    // PHYSICAL: Horizontal swipes = SPIN (like flicking a wheel)
+    if (Math.abs(event.velocityX) > Math.abs(event.velocityY)) {
+      // Strong spin momentum
+      const direction = event.velocityX > 0 ? 1 : -1;
+      physics.rotationVelocity = direction * velocity * 2.0; // Strong flick
       
-      // Add smooth transition effect
-      physics.pulseSpeed = velocity * 0.5;
+      // Immediate visual feedback
+      parms.swirlSpeed += direction * velocity * 0.3;
+      parms.swirlSpeed = Math.max(-1.5, Math.min(1.5, parms.swirlSpeed));
+      notifyUserInteraction('swirlSpeed', parms.swirlSpeed);
     }
   });
   
@@ -220,21 +213,25 @@ export function setupHammerGestures(element, audioVisualMapper = null) {
     }
   });
   
-  // Handle rotate for INTUITIVE rotation control
+  // Handle rotate for PHYSICAL rotation
   hammer.on('rotate', (event) => {
-    // INTUITIVE: Clockwise rotation = spin right, counter-clockwise = spin left
-    // event.rotation is in degrees, positive = clockwise
-    const rotationDirection = event.rotation > 0 ? 1 : -1;
-    const rotationSpeed = Math.abs(event.rotation) * 0.01;
+    // PHYSICAL: Two-finger rotation = direct control
+    // event.rotation is cumulative degrees from start
+    const rotationRadians = event.rotation * Math.PI / 180;
     
-    // SMOOTH: Set swirl speed based on rotation with interpolation
-    const targetSpeed = parms.swirlSpeed + (rotationDirection * rotationSpeed * 0.5);
-    const clampedSpeed = Math.max(-0.8, Math.min(0.8, targetSpeed));
-    parms.swirlSpeed = parms.swirlSpeed * 0.8 + clampedSpeed * 0.2; // Smooth blend
+    // Direct rotation control - rotate the visual as fingers rotate
+    parms.swirlSpeed = Math.max(-1.5, Math.min(1.5, rotationRadians * 0.3));
     notifyUserInteraction('swirlSpeed', parms.swirlSpeed);
     
-    // Gentle momentum
-    physics.rotationVelocity = rotationDirection * rotationSpeed * 2; // Much less aggressive
+    // Store rotation for momentum when gesture ends
+    physics.lastRotation = event.rotation;
+  });
+  
+  hammer.on('rotateend', (event) => {
+    // Add momentum based on final rotation speed
+    const finalRotation = event.rotation;
+    const rotationDelta = finalRotation - (physics.lastRotation || 0);
+    physics.rotationVelocity = rotationDelta * 0.1;
   });
   
   // Double tap for complexity toggle
