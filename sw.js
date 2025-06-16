@@ -1,5 +1,5 @@
 // Service Worker for offline PWA functionality
-const CACHE_NAME = 'dream-kaleido-v1';
+const CACHE_NAME = 'dream-kaleido-v1.3.0';
 const urlsToCache = [
   '/',
   '/index.html',

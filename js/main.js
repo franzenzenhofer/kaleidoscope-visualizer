@@ -7,8 +7,8 @@ import { AudioAnalyzer } from './audio.js';
 import { AudioVisualMapper } from './audio-visual.js';
 
 // Version info
-console.log('🎨 Dream-Kaleido-Flow v1.2.0 - Cache Busted');
-console.log('🚀 USER DOMINANCE + Mobile Quality + Cache Busting');
+console.log('🎨 Dream-Kaleido-Flow v1.3.0 - iPod Wheel Controls');
+console.log('🚀 Speed-based circular motion + Perfect physics');
 
 // Initialize canvas first - CRITICAL for preventing non-finite errors
 setupMobileViewport();
