@@ -6,9 +6,18 @@ import { enhanceForDesktop, parms } from './config.js';
 import { AudioAnalyzer } from './audio.js';
 import { AudioVisualMapper } from './audio-visual.js';
 
-// Initialize canvas first
+// Version info
+console.log('🎨 Dream-Kaleido-Flow v1.2.0 - Cache Busted');
+console.log('🚀 USER DOMINANCE + Mobile Quality + Cache Busting');
+
+// Initialize canvas first - CRITICAL for preventing non-finite errors
 setupMobileViewport();
 resize();
+
+// FAILSAFE: Force a second resize to ensure dimensions are set
+setTimeout(() => {
+  resize();
+}, 10);
 
 // Initialize audio components early
 const audioAnalyzer = new AudioAnalyzer();
@@ -26,10 +35,9 @@ if ('ontouchstart' in window) {
   setupDesktopInteractions(canvas, audioVisual);
 }
 
-// Physics update loop
+// Physics update function - called by renderer
 let lastTime = performance.now();
-function updatePhysics() {
-  const currentTime = performance.now();
+export function updatePhysicsAndAudio(currentTime) {
   const deltaTime = currentTime - lastTime;
   lastTime = currentTime;
   
@@ -42,13 +50,6 @@ function updatePhysics() {
   }
   
   // Update audio visualization
-  updateAudioVisualization();
-  
-  requestAnimationFrame(updatePhysics);
-}
-
-// Update audio visualization in the physics loop
-function updateAudioVisualization() {
   if (audioAnalyzer.isActive) {
     // Update visual parameters based on audio
     audioVisual.update();
@@ -66,8 +67,6 @@ function updateAudioVisualization() {
   }
 }
 
-updatePhysics();
-
 // Prevent iOS bounce
 document.body.addEventListener('touchmove', (e) => {
   e.preventDefault();
@@ -82,8 +81,10 @@ document.addEventListener('visibilitychange', () => {
   }
 });
 
-// Start animation
-requestAnimationFrame(draw);
+// Start animation after a short delay to ensure everything is initialized
+setTimeout(() => {
+  requestAnimationFrame(draw);
+}, 100);
 
 // Get UI elements
 const playBtn = document.getElementById('playBtn');

@@ -7,13 +7,10 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "serve": "vite preview",
     "generate-icons": "node generate-icons.mjs",
     "install-playwright": "npx playwright install"
   },
-  "dependencies": {
-    "hammerjs": "^2.0.8"
-  },
+  "dependencies": {},
   "devDependencies": {
     "vite": "^5.0.0",
     "playwright": "^1.40.0"

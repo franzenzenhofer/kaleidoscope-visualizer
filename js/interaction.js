@@ -111,11 +111,29 @@ export function setupHammerGestures(element, audioVisualMapper = null) {
     const deltaX = event.center.x - lastX;
     const deltaY = event.center.y - lastY;
     
-    // Vertical movement changes slices (like adjusting a dial)
-    if (Math.abs(deltaY) > Math.abs(deltaX)) {
-      const newSlices = Math.max(4, Math.min(24, Math.round(parms.slices - deltaY * 0.02)));
+    // IMPACTFUL: Both horizontal and vertical movements have strong effects
+    // Horizontal movement = rotation speed AND size
+    if (Math.abs(deltaX) > 2) {
+      const newSwirlSpeed = Math.max(0, Math.min(2.0, parms.swirlSpeed + deltaX * 0.005));
+      parms.swirlSpeed = newSwirlSpeed;
+      notifyUserInteraction('swirlSpeed', newSwirlSpeed);
+      
+      // Horizontal also affects size slightly for visual feedback
+      const newSizeMod = Math.max(0.05, Math.min(0.5, parms.sizeMod + deltaX * 0.0005));
+      parms.sizeMod = newSizeMod;
+      notifyUserInteraction('sizeMod', newSizeMod);
+    }
+    
+    // Vertical movement = complexity AND base radius
+    if (Math.abs(deltaY) > 2) {
+      const newSlices = Math.max(4, Math.min(24, Math.round(parms.slices - deltaY * 0.05))); // 2.5x stronger
       parms.slices = newSlices;
       notifyUserInteraction('slices', newSlices);
+      
+      // Vertical also affects base radius for dramatic size changes
+      const newBaseRadius = Math.max(0.1, Math.min(0.6, parms.baseRadius - deltaY * 0.001));
+      parms.baseRadius = newBaseRadius;
+      notifyUserInteraction('baseRadius', newBaseRadius);
     }
     
     lastX = event.center.x;
@@ -132,80 +150,119 @@ export function setupHammerGestures(element, audioVisualMapper = null) {
     }
   });
   
-  // Handle swipe for quick spins
+  // Handle swipe for INTUITIVE transformations
   hammer.on('swipe', (event) => {
-    // Swipe velocity determines spin speed
+    // Swipe velocity determines impact strength
     const velocity = Math.sqrt(event.velocityX * event.velocityX + event.velocityY * event.velocityY);
-    const direction = Math.atan2(event.velocityY, event.velocityX);
     
-    // Horizontal swipes spin the kaleidoscope
+    // INTUITIVE: Horizontal swipes control rotation
     if (Math.abs(event.velocityX) > Math.abs(event.velocityY)) {
-      physics.rotationVelocity = event.velocityX * 0.5;
-      // Add a pulse effect on swipe
-      physics.pulseSpeed = velocity * 0.3;
+      // Swipe right = rotate clockwise, swipe left = rotate counter-clockwise
+      const direction = event.velocityX > 0 ? 1 : -1;
+      physics.rotationVelocity = direction * velocity * 1.5;
+      
+      // Instant speed change for immediate feedback
+      const newSwirlSpeed = parms.swirlSpeed + (direction * velocity * 0.2);
+      parms.swirlSpeed = Math.max(-2, Math.min(2, newSwirlSpeed));
+      notifyUserInteraction('swirlSpeed', newSwirlSpeed);
     }
     
-    // Vertical swipes change complexity
+    // INTUITIVE: Vertical swipes control size/radius
     if (Math.abs(event.velocityY) > Math.abs(event.velocityX)) {
-      if (event.velocityY < 0) { // Swipe up = more complex
-        const newSlices = Math.min(24, parms.slices + 4);
-        const newCircles = Math.min(12, parms.circles + 2);
-        parms.slices = newSlices;
-        parms.circles = newCircles;
-        notifyUserInteraction('slices', newSlices);
-        notifyUserInteraction('circles', newCircles);
-      } else { // Swipe down = simpler
-        const newSlices = Math.max(4, parms.slices - 4);
-        const newCircles = Math.max(3, parms.circles - 2);
-        parms.slices = newSlices;
-        parms.circles = newCircles;
-        notifyUserInteraction('slices', newSlices);
-        notifyUserInteraction('circles', newCircles);
+      if (event.velocityY < 0) { // Swipe UP = BIGGER radius
+        // Expand base radius
+        const newBaseRadius = Math.min(0.6, parms.baseRadius * 1.3);
+        parms.baseRadius = newBaseRadius;
+        notifyUserInteraction('baseRadius', newBaseRadius);
+        
+        // Also increase element size
+        const newSizeMod = Math.min(0.5, parms.sizeMod * 1.2);
+        parms.sizeMod = newSizeMod;
+        notifyUserInteraction('sizeMod', newSizeMod);
+      } else { // Swipe DOWN = SMALLER radius
+        // Contract base radius
+        const newBaseRadius = Math.max(0.1, parms.baseRadius * 0.7);
+        parms.baseRadius = newBaseRadius;
+        notifyUserInteraction('baseRadius', newBaseRadius);
+        
+        // Also decrease element size
+        const newSizeMod = Math.max(0.05, parms.sizeMod * 0.8);
+        parms.sizeMod = newSizeMod;
+        notifyUserInteraction('sizeMod', newSizeMod);
       }
+      
+      // Add smooth transition effect
+      physics.pulseSpeed = velocity * 0.5;
     }
   });
   
-  // Handle pinch for sizing with spring effect
+  // Handle pinch for INTUITIVE zoom control
   hammer.on('pinch', (event) => {
-    const newSizeMod = Math.max(0.1, Math.min(0.5, 0.18 * event.scale));
+    // INTUITIVE: Pinch controls overall scale
+    const scale = event.scale;
+    
+    // Base radius changes with pinch - expand/contract the whole pattern
+    const currentRadius = parms.baseRadius;
+    const newBaseRadius = Math.max(0.1, Math.min(0.6, currentRadius * scale));
+    parms.baseRadius = newBaseRadius;
+    notifyUserInteraction('baseRadius', newBaseRadius);
+    
+    // Size modification scales with pinch
+    const currentSize = parms.sizeMod;
+    const newSizeMod = Math.max(0.05, Math.min(0.6, currentSize * scale));
     parms.sizeMod = newSizeMod;
     notifyUserInteraction('sizeMod', newSizeMod);
     
-    // Add spring bounce on pinch end
+    // Add smooth transition on pinch end
     if (event.isFinal) {
-      physics.pulseSpeed = Math.abs(1 - event.scale) * 0.5;
+      physics.pulseSpeed = Math.abs(1 - scale) * 0.5;
     }
   });
   
-  // Handle rotate for direct rotation control
+  // Handle rotate for INTUITIVE rotation control
   hammer.on('rotate', (event) => {
-    // Direct rotation maps to kaleidoscope rotation
-    physics.rotationVelocity = event.rotation * 0.01;
+    // INTUITIVE: Clockwise rotation = spin right, counter-clockwise = spin left
+    // event.rotation is in degrees, positive = clockwise
+    const rotationDirection = event.rotation > 0 ? 1 : -1;
+    const rotationSpeed = Math.abs(event.rotation) * 0.01;
     
-    // Also adjust hue speed based on rotation speed
-    const newHueSpeed = Math.max(10, Math.min(100, 40 + Math.abs(event.rotation) / 2));
-    parms.hueSpeed = newHueSpeed;
-    notifyUserInteraction('hueSpeed', newHueSpeed);
+    // Set swirl speed based on rotation
+    const newSwirlSpeed = parms.swirlSpeed + (rotationDirection * rotationSpeed);
+    parms.swirlSpeed = Math.max(-2, Math.min(2, newSwirlSpeed));
+    notifyUserInteraction('swirlSpeed', newSwirlSpeed);
+    
+    // Add momentum to physics
+    physics.rotationVelocity = rotationDirection * rotationSpeed * 10;
   });
   
-  // Double tap for spin boost
+  // Double tap for complexity toggle
   hammer.on('doubletap', (event) => {
-    // Tap location determines spin direction
-    const centerX = window.innerWidth / 2;
-    const x = event.center.x - centerX;
+    // INTUITIVE: Double tap cycles through complexity levels
+    const complexityLevels = [
+      { slices: 6, circles: 4 },   // Simple
+      { slices: 10, circles: 7 },  // Medium
+      { slices: 16, circles: 10 }  // Complex
+    ];
     
-    // Add rotational impulse based on tap location
-    physics.rotationVelocity += (x / centerX) * 0.8;
-    
-    // Random pattern change
-    if (Math.random() > 0.5) {
-      const newSlices = Math.floor(Math.random() * 12) + 6;
-      const newCircles = Math.floor(Math.random() * 6) + 4;
-      parms.slices = newSlices;
-      parms.circles = newCircles;
-      notifyUserInteraction('slices', newSlices);
-      notifyUserInteraction('circles', newCircles);
+    // Find current level and go to next
+    let currentLevel = 0;
+    for (let i = 0; i < complexityLevels.length; i++) {
+      if (parms.slices >= complexityLevels[i].slices) {
+        currentLevel = i;
+      }
     }
+    
+    // Cycle to next level
+    const nextLevel = (currentLevel + 1) % complexityLevels.length;
+    const newSettings = complexityLevels[nextLevel];
+    
+    parms.slices = newSettings.slices;
+    parms.circles = newSettings.circles;
+    notifyUserInteraction('slices', newSettings.slices);
+    notifyUserInteraction('circles', newSettings.circles);
+    
+    // Add visual feedback
+    physics.pulseSpeed = 0.5;
   });
   
   // Triple tap for shake effect
@@ -236,7 +293,21 @@ export function setupHammerGestures(element, audioVisualMapper = null) {
 export function updateToyPhysics(deltaTime) {
   // Apply rotational velocity with momentum
   if (Math.abs(physics.rotationVelocity) > 0.001) {
-    const newSwirlSpeed = parms.swirlSpeed + physics.rotationVelocity * deltaTime * 0.001;
+    // FIXED: Cap the swirl speed to prevent infinite accumulation
+    const defaultSpeed = 0.2; // Base speed to gravitate towards
+    const maxDeviation = 1.5; // Maximum speed allowed
+    
+    // Calculate new speed with limits
+    let newSwirlSpeed = parms.swirlSpeed + physics.rotationVelocity * deltaTime * 0.001;
+    
+    // Clamp to reasonable bounds
+    newSwirlSpeed = Math.max(-maxDeviation, Math.min(maxDeviation, newSwirlSpeed));
+    
+    // Gradually pull back to default when no interaction
+    if (Math.abs(physics.rotationVelocity) < 0.1) {
+      newSwirlSpeed = newSwirlSpeed * 0.98 + defaultSpeed * 0.02;
+    }
+    
     parms.swirlSpeed = newSwirlSpeed;
     notifyUserInteraction('swirlSpeed', newSwirlSpeed);
     
@@ -246,6 +317,12 @@ export function updateToyPhysics(deltaTime) {
     // Stop when very slow
     if (Math.abs(physics.rotationVelocity) < 0.001) {
       physics.rotationVelocity = 0;
+    }
+  } else {
+    // When no velocity, slowly return to default speed
+    const defaultSpeed = 0.2;
+    if (Math.abs(parms.swirlSpeed - defaultSpeed) > 0.01) {
+      parms.swirlSpeed = parms.swirlSpeed * 0.99 + defaultSpeed * 0.01;
     }
   }
   
@@ -262,12 +339,23 @@ export function updateToyPhysics(deltaTime) {
   
   // Apply shake effects
   if (physics.shakeMagnitude > 0.1) {
+    // Store original speed before shake
+    if (!physics.originalSpeed) {
+      physics.originalSpeed = parms.swirlSpeed;
+    }
+    
     const shake = (Math.random() - 0.5) * physics.shakeMagnitude * 0.002;
-    const newSwirlSpeed = Math.max(0, parms.swirlSpeed + shake);
-    parms.swirlSpeed = newSwirlSpeed;
-    notifyUserInteraction('swirlSpeed', newSwirlSpeed);
+    const shakenSpeed = Math.max(0, Math.min(2.0, physics.originalSpeed + shake));
+    parms.swirlSpeed = shakenSpeed;
+    notifyUserInteraction('swirlSpeed', shakenSpeed);
     
     physics.shakeMagnitude *= physics.shakeDecay;
+    
+    // Return to original speed when shake is done
+    if (physics.shakeMagnitude < 0.1) {
+      parms.swirlSpeed = physics.originalSpeed;
+      physics.originalSpeed = null;
+    }
   }
 }
 

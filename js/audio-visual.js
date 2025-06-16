@@ -27,8 +27,8 @@ export class AudioVisualMapper {
       hueSmoothing: 0.998,       // Increased from 0.995
       parameterSmoothing: 0.98,  // New: general parameter smoothing
       
-      // Interaction blending - USER DOMINANCE when interacting
-      userInteractionWeight: 0.9,  // 90% user input, 10% audio when interacting
+      // Interaction blending - ABSOLUTE USER CONTROL
+      userInteractionWeight: 1.0,  // 100% user control when interacting
       audioOnlyWeight: 1.0,        // 100% audio when no user interaction
       userFullControlWeight: 1.0,  // 100% user when audio is disabled
       
@@ -63,13 +63,13 @@ export class AudioVisualMapper {
     // Current interpolated values
     this.currentValues = { ...this.targetValues };
     
-    // User interaction tracking
+    // User interaction tracking - 100% USER CONTROL
     this.userInteraction = {
       isActive: false,
       lastInteractionTime: 0,
       userValues: { ...this.targetValues },
-      interactionDecay: 0.98,  // How quickly user interaction fades
-      interactionThreshold: 1500  // Reduced from 2000ms - faster handoff to audio
+      interactionDecay: 1.0,  // No decay - instant switch
+      interactionThreshold: 2000  // 2 seconds before audio takes back control
     };
     
     // Base values to return to
@@ -112,9 +112,9 @@ export class AudioVisualMapper {
       this.userInteraction.isActive = false;
     }
     
-    // USER DOMINANT: Gradually decay user interaction influence but keep it high
+    // ABSOLUTE USER CONTROL: 100% or 0%, no in-between
     if (this.userInteraction.isActive) {
-      return Math.max(0.5, 1 - (timeSinceInteraction / this.userInteraction.interactionThreshold));
+      return 1.0; // Always 100% when user is interacting
     }
     
     return 0;
@@ -244,18 +244,13 @@ export class AudioVisualMapper {
       audioTargets.slices = Math.max(4, Math.min(12, this.baseValues.slices + variation));
     }
     
-    // USER DOMINANT BLENDING: Blend user interaction with audio targets
+    // ABSOLUTE CONTROL: Either 100% user or 100% audio, no blending
     Object.keys(this.targetValues).forEach(key => {
       if (userInfluence > 0) {
-        // USER DOMINATES: 90% user input when interacting
-        this.targetValues[key] = this.lerp(
-          audioTargets[key], 
-          this.userInteraction.userValues[key], 
-          this.config.userInteractionWeight, // 90% user dominance
-          deltaTime
-        );
+        // 100% USER CONTROL - directly use user values
+        this.targetValues[key] = this.userInteraction.userValues[key];
       } else {
-        // Pure audio mode when no user interaction
+        // 100% AUDIO CONTROL
         this.targetValues[key] = audioTargets[key];
       }
       
@@ -267,10 +262,8 @@ export class AudioVisualMapper {
         deltaTime
       );
       
-      // Apply the smoothed values to the actual parameters ONLY if audio is active
-      if (this.isActive && this.audio.isActive) {
-        parms[key] = this.currentValues[key];
-      }
+      // Apply the smoothed values to the actual parameters
+      parms[key] = this.currentValues[key];
     });
   }
   
@@ -330,9 +323,7 @@ export class AudioVisualMapper {
       this.targetValues.swirlSpeed = this.baseValues.swirlSpeed * 0.3;
     }
     
-    // Ensure we never exceed screen bounds
-    const maxRadius = Math.min(window.innerWidth, window.innerHeight) * 0.0008;
-    this.targetValues.baseRadius = Math.min(this.targetValues.baseRadius, maxRadius);
+    // Remove the incorrect maxRadius clamping - baseRadius is unit-less 0-1
     
     // Ultra-smooth rotation on medium bass
     if (this.smoothedValues.bass > 0.3 && this.smoothedValues.bass < 0.7) {

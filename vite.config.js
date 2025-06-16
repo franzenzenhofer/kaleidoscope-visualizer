@@ -2,10 +2,11 @@ import { defineConfig } from 'vite';
 
 export default defineConfig({
   root: '.',
+  base: '/',
   build: {
     outDir: 'dist',
     emptyOutDir: true,
-    minify: 'terser',
+    // Use esbuild for faster builds (terser not installed)
     rollupOptions: {
       input: {
         main: 'index.html'

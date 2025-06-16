@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#000000">
@@ -23,8 +23,11 @@
     height: 100%;
     background: #000;
     overflow: hidden;
-    position: fixed;
     touch-action: none;
+  }
+  
+  body {
+    position: relative; /* Allow keyboard to push content */
   }
   
   canvas {
@@ -281,7 +284,20 @@
 </audio>
 
 <!-- Load Hammer.js from CDN for touch gestures -->
-<script src="https://hammerjs.github.io/dist/hammer.min.js"></script>
-<script type="module" src="js/main.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8/hammer.min.js"></script>
+
+<!-- Cache busted JavaScript modules -->
+<script type="module" src="js/main.js?v=1.2.0-20241227"></script>
+
+<!-- Register Service Worker -->
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js')
+      .then(registration => console.log('SW registered:', registration))
+      .catch(error => console.log('SW registration failed:', error));
+  });
+}
+</script>
 </body>
 </html>

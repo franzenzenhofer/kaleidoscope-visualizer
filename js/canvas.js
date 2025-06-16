@@ -1,10 +1,29 @@
 export const canvas = document.getElementById('c');
-export const ctx = canvas.getContext('2d', { 
+// Feature detect P3 color space support
+const contextOptions = { 
   alpha: false,
   desynchronized: true,
   willReadFrequently: false
-});
-export let w, h, dpr, midX, midY;
+};
+
+// Only add colorSpace if supported
+if (typeof OffscreenCanvasRenderingContext2D !== 'undefined' && 
+    'colorSpace' in OffscreenCanvasRenderingContext2D.prototype) {
+  contextOptions.colorSpace = 'display-p3';
+}
+
+export const ctx = canvas.getContext('2d', contextOptions);
+
+// CRISP VISUALS: Set quality rendering hints
+ctx.imageSmoothingEnabled = true;
+ctx.imageSmoothingQuality = 'high';
+
+// Initialize with safe defaults to prevent non-finite errors
+export let w = 100;
+export let h = 100;
+export let dpr = 1;
+export let midX = 50;
+export let midY = 50;
 
 // MOBILE FIRST resize handler
 export function resize() {
@@ -12,12 +31,14 @@ export function resize() {
   const width = window.innerWidth;
   const height = window.innerHeight;
   
-  // Start with mobile-optimized DPR
-  dpr = Math.min(window.devicePixelRatio || 1, 2);
+  // Performance-optimized DPR limits
+  const isMobile = window.matchMedia('(max-width: 768px)').matches;
   
-  // Allow higher DPR only on desktop with good performance
-  if (window.matchMedia('(min-width: 769px)').matches) {
-    // Cap DPR to prevent performance issues and sizing problems
+  if (isMobile) {
+    // Limit to 1.5 on mobile for better performance
+    dpr = Math.min(window.devicePixelRatio || 1, 1.5);
+  } else {
+    // Desktop can handle up to 2
     dpr = Math.min(window.devicePixelRatio || 1, 2);
   }
   
@@ -25,13 +46,13 @@ export function resize() {
   w = width;
   h = height;
   
-  // Set CSS size first
-  canvas.style.width = width + 'px';
-  canvas.style.height = height + 'px';
-  
-  // Set actual canvas buffer size with DPR
+  // Set actual canvas buffer size with DPR first
   canvas.width = width * dpr;
   canvas.height = height * dpr;
+  
+  // Then set CSS size to avoid double reflow
+  canvas.style.width = width + 'px';
+  canvas.style.height = height + 'px';
   
   // Scale the drawing context to match DPR
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);

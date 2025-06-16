@@ -120,7 +120,10 @@ export class AudioAnalyzer {
       } catch (error) {
         // Fallback for older browsers or stricter mobile policies
         try {
-          stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          stream = await navigator.mediaDevices.getUserMedia({ 
+            audio: true,
+            video: false 
+          });
         } catch (fallbackError) {
           console.error('Microphone access failed:', fallbackError);
           
@@ -272,7 +275,7 @@ export class AudioAnalyzer {
   }
   
   analyze() {
-    if (!this.isActive) return;
+    if (!this.isActive) return; // Stop RAF loop when not active
     
     const currentTime = performance.now();
     const deltaTime = currentTime - this.lastUpdateTime;
@@ -357,8 +360,10 @@ export class AudioAnalyzer {
       this.lastBeatTime = now;
     }
     
-    // Continue analyzing
-    requestAnimationFrame(() => this.analyze());
+    // Continue analyzing only if still active
+    if (this.isActive) {
+      requestAnimationFrame(() => this.analyze());
+    }
   }
   
   // Get frequency data for custom visualization
