@@ -87,7 +87,7 @@ export function setupHammerGestures(element, audioVisualMapper = null) {
     const currentTime = Date.now();
     const deltaTime = Math.max(1, currentTime - physics.lastRotationTime);
     
-    // PHYSICAL OBJECT: Track circular motion around center
+    // iPOD WHEEL: Track circular motion speed around center
     const centerX = window.innerWidth / 2;
     const centerY = window.innerHeight / 2;
     const currentAngle = Math.atan2(event.center.y - centerY, event.center.x - centerX);
@@ -97,19 +97,39 @@ export function setupHammerGestures(element, audioVisualMapper = null) {
     if (angleDelta > Math.PI) angleDelta -= 2 * Math.PI;
     if (angleDelta < -Math.PI) angleDelta += 2 * Math.PI;
     
-    // INTUITIVE: Positive angle = clockwise rotation
-    if (Math.abs(angleDelta) > 0.01) { // Only if significant movement
-      // Direct mapping: finger moves clockwise = visual rotates clockwise
-      const rotationSpeed = angleDelta * 2; // Amplify for responsiveness
-      parms.swirlSpeed += rotationSpeed;
-      parms.swirlSpeed = Math.max(-1, Math.min(1, parms.swirlSpeed));
+    // iPOD WHEEL PHYSICS: Angular velocity determines rotation speed
+    const angularVelocity = angleDelta / (deltaTime / 1000); // radians per second
+    
+    // Only respond to circular motion (not straight lines)
+    const distanceFromCenter = Math.sqrt(
+      Math.pow(event.center.x - centerX, 2) + 
+      Math.pow(event.center.y - centerY, 2)
+    );
+    const screenSize = Math.min(window.innerWidth, window.innerHeight);
+    const minRadius = screenSize * 0.2; // Wheel starts 20% from center
+    const maxRadius = screenSize * 0.45; // Wheel ends at 45% from center
+    
+    // Check if we're in the wheel zone
+    if (distanceFromCenter > minRadius && distanceFromCenter < maxRadius && Math.abs(angleDelta) > 0.0001) {
+      // iPOD SENSITIVITY: More responsive to speed changes
+      // Direct mapping - the speed you move is the speed it rotates
+      let wheelSpeed = angularVelocity * 0.5; // Comfortable scaling
+      
+      // Add subtle acceleration for very fast movements
+      if (Math.abs(angularVelocity) > 3) {
+        wheelSpeed *= 1.2; // Boost for fast spins
+      }
+      
+      // Smooth the speed changes slightly for comfort
+      parms.swirlSpeed = parms.swirlSpeed * 0.7 + wheelSpeed * 0.3;
+      parms.swirlSpeed = Math.max(-3, Math.min(3, parms.swirlSpeed));
       notifyUserInteraction('swirlSpeed', parms.swirlSpeed);
       
-      // Store for momentum
-      physics.velocityHistory.push(angleDelta * 100);
-      if (physics.velocityHistory.length > physics.maxVelocityHistory) {
-        physics.velocityHistory.shift();
-      }
+      // Reset momentum while actively scrolling
+      physics.rotationVelocity = 0;
+      
+      // Visual feedback that we're in wheel mode
+      physics.pulseSpeed = 0.1; // Subtle pulse
     }
     
     // LINEAR MOTION: Up/down for size, left/right for complexity
@@ -137,11 +157,9 @@ export function setupHammerGestures(element, audioVisualMapper = null) {
   });
   
   hammer.on('panend', (event) => {
-    // SMOOTH: Very gentle momentum
-    if (physics.velocityHistory.length > 0) {
-      const avgVelocity = physics.velocityHistory.reduce((a, b) => a + b, 0) / physics.velocityHistory.length;
-      physics.rotationVelocity = avgVelocity * 0.05; // Much gentler momentum
-    }
+    // iPOD WHEEL: When finger lifts, rotation gradually slows down
+    // The current swirl speed becomes the momentum
+    physics.rotationVelocity = parms.swirlSpeed * 2; // Keep some momentum
   });
   
   // Handle swipe for PHYSICAL transformations
@@ -290,35 +308,20 @@ export function setupHammerGestures(element, audioVisualMapper = null) {
 
 // Update physics for toy-like motion
 export function updateToyPhysics(deltaTime) {
-  // SMOOTH: Apply rotational velocity with heavy smoothing
+  // iPOD WHEEL PHYSICS: Natural deceleration when not actively scrolling
   if (Math.abs(physics.rotationVelocity) > 0.001) {
-    const defaultSpeed = 0.2; // Base speed to gravitate towards
-    const maxSpeed = 0.8; // Lower maximum for smoother motion
-    const minSpeed = -0.8;
-    
-    // Much gentler speed application
-    let deltaSpeed = physics.rotationVelocity * deltaTime * 0.0003; // 3x slower
-    let targetSpeed = parms.swirlSpeed + deltaSpeed;
-    
-    // Smooth clamping
-    targetSpeed = Math.max(minSpeed, Math.min(maxSpeed, targetSpeed));
-    
-    // ULTRA SMOOTH: Heavy interpolation
-    parms.swirlSpeed = parms.swirlSpeed * 0.95 + targetSpeed * 0.05;
+    // Apply momentum
+    parms.swirlSpeed = physics.rotationVelocity;
     notifyUserInteraction('swirlSpeed', parms.swirlSpeed);
     
-    // Stronger friction for quicker stop
-    physics.rotationVelocity *= 0.98;
+    // Natural friction - like iPod wheel deceleration
+    physics.rotationVelocity *= 0.92; // Faster deceleration, like real iPod
     
     // Stop when very slow
-    if (Math.abs(physics.rotationVelocity) < 0.01) {
+    if (Math.abs(physics.rotationVelocity) < 0.05) {
       physics.rotationVelocity = 0;
-    }
-  } else {
-    // Smooth return to default
-    const defaultSpeed = 0.2;
-    if (Math.abs(parms.swirlSpeed - defaultSpeed) > 0.01) {
-      parms.swirlSpeed = parms.swirlSpeed * 0.97 + defaultSpeed * 0.03;
+      parms.swirlSpeed = 0; // Full stop
+      notifyUserInteraction('swirlSpeed', 0);
     }
   }
   
