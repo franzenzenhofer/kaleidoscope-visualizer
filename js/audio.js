@@ -170,6 +170,9 @@ export class AudioAnalyzer {
       // Stop any existing sources
       this.stopAllSources();
       
+      // Clear any existing music source reference to allow reconnection
+      this.musicSource = null;
+      
       // Get music player element
       this.musicPlayer = document.getElementById('musicPlayer');
       if (!this.musicPlayer) {
