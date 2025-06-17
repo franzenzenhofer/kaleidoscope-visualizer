@@ -8,6 +8,10 @@
     "build": "vite build",
     "preview": "vite preview",
     "test": "node test-app.mjs",
+    "deploy": "node deploy.mjs",
+    "version:patch": "npm version patch && npm run deploy",
+    "version:minor": "npm version minor && npm run deploy",
+    "version:major": "npm version major && npm run deploy",
     "generate-icons": "node generate-icons.mjs",
     "install-playwright": "npx playwright install"
   },
