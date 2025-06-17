@@ -5,7 +5,9 @@ export const parms = {
   baseRadius: 0.35,      // Decreased from 0.4 - more elements fit
   swirlSpeed: 0.2,       // Increased from 0.15 - more dynamic
   hueSpeed: 35,          // Slightly increased for better color flow
-  sizeMod: 0.18          // Decreased from 0.2 - finer elements
+  sizeMod: 0.18,         // Decreased from 0.2 - finer elements
+  luminance: 0.6,        // 0-1 master brightness
+  hueDrift: 0            // audio / rotate gesture
 };
 
 // Store original defaults for reset functionality
@@ -15,7 +17,9 @@ export const defaultParms = {
   baseRadius: 0.35,
   swirlSpeed: 0.2,
   hueSpeed: 35,
-  sizeMod: 0.18
+  sizeMod: 0.18,
+  luminance: 0.6,
+  hueDrift: 0
 };
 
 // Desktop enhancements for larger screens - now closer to mobile
@@ -29,5 +33,7 @@ export function enhanceForDesktop() {
     parms.swirlSpeed = 0.25;   // Smooth motion
     parms.hueSpeed = 40;       // Rich color transitions
     parms.sizeMod = 0.16;      // Fine detail
+    parms.luminance = 0.6;     // Same brightness default
+    parms.hueDrift = 0;        // No initial drift
   }
 }

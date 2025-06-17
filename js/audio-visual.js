@@ -1,5 +1,7 @@
 // Audio-visual mapping module - bass-focused, relaxing experience
 import { parms } from './config.js';
+import { applyRouting, getRouterForMode } from './audio-router.js';
+import { physics } from './interaction.js';
 
 export class AudioVisualMapper {
   constructor(audioAnalyzer) {
@@ -126,10 +128,19 @@ export class AudioVisualMapper {
     this.baseValues = { ...parms };
     // Initialize target values
     Object.keys(this.targetValues).forEach(key => {
-      this.targetValues[key] = parms[key];
-      this.currentValues[key] = parms[key];
-      this.userInteraction.userValues[key] = parms[key];
+      if (parms.hasOwnProperty(key)) {
+        this.targetValues[key] = parms[key];
+        this.currentValues[key] = parms[key];
+        this.userInteraction.userValues[key] = parms[key];
+      }
     });
+    // Add new params
+    this.targetValues.luminance = parms.luminance || 0.6;
+    this.targetValues.hueDrift = parms.hueDrift || 0;
+    this.currentValues.luminance = parms.luminance || 0.6;
+    this.currentValues.hueDrift = parms.hueDrift || 0;
+    this.userInteraction.userValues.luminance = parms.luminance || 0.6;
+    this.userInteraction.userValues.hueDrift = parms.hueDrift || 0;
     this.lastUpdateTime = performance.now();
   }
   
@@ -152,12 +163,25 @@ export class AudioVisualMapper {
     
     const metrics = this.audio.getMetrics();
     
+    // Get mode-specific router configuration
+    const currentRouter = getRouterForMode(physics.mode);
+    
     // Update user interaction state
     const userInfluence = this.updateUserInteraction();
     
     // Ultra-smooth value tracking with time-based interpolation
     this.smoothedValues.bass = this.lerp(this.smoothedValues.bass, metrics.bass, 0.08, deltaTime);
     this.smoothedValues.volume = this.lerp(this.smoothedValues.volume, metrics.volume, 0.06, deltaTime);
+    
+    // Apply signal routing
+    const audioSignals = {
+      bass: metrics.bass,
+      mid: metrics.mid || 0,
+      treble: metrics.treble || 0,
+      beat: metrics.beat ? 1.0 : 0
+    };
+    
+    const routedParams = applyRouting(currentRouter, audioSignals);
     
     // Smooth beat pulse handling
     if (metrics.beat && metrics.bass > 0.4) {
@@ -208,7 +232,7 @@ export class AudioVisualMapper {
       deltaTime
     );
     
-    // Calculate audio-driven target parameter values
+    // Calculate audio-driven target parameter values using routed signals
     const audioTargets = {
       swirlSpeed: this.baseValues.swirlSpeed + 
                   Math.max(-this.config.maxRotationSpeed, 
@@ -218,8 +242,36 @@ export class AudioVisualMapper {
       circles: this.baseValues.circles,
       hueSpeed: Math.max(5, Math.min(this.config.maxHueSpeed, 
                         this.baseValues.hueSpeed + this.smoothedValues.hue)),
-      slices: this.baseValues.slices
+      slices: this.baseValues.slices,
+      luminance: parms.luminance,
+      hueDrift: parms.hueDrift
     };
+    
+    // Apply routed parameters
+    if (routedParams.breath) {
+      const breathFactor = Math.min(1, routedParams.breath);
+      audioTargets.baseRadius = this.baseValues.baseRadius * (1 + breathFactor * 0.3);
+      audioTargets.sizeMod = this.baseValues.sizeMod * (1 + breathFactor * 0.2);
+    }
+    
+    if (routedParams.luminance) {
+      audioTargets.luminance = Math.max(0.3, Math.min(1.0, 
+        this.baseValues.luminance + routedParams.luminance * 0.4));
+    }
+    
+    if (routedParams.hueDrift) {
+      audioTargets.hueDrift = Math.max(-1, Math.min(1, routedParams.hueDrift));
+    }
+    
+    if (routedParams.sliceJitter && Math.random() < 0.1) {
+      const jitter = Math.floor(routedParams.sliceJitter * 3);
+      audioTargets.slices = Math.max(4, Math.min(20, 
+        this.baseValues.slices + (Math.random() > 0.5 ? jitter : -jitter)));
+    }
+    
+    if (routedParams.pulseKick) {
+      this.beatPulse = Math.max(this.beatPulse, routedParams.pulseKick);
+    }
     
     // Smooth size calculations with easing
     const sizeModulation = Math.min(this.config.maxSizeVariation, this.smoothedValues.breathing);
@@ -251,7 +303,7 @@ export class AudioVisualMapper {
         this.targetValues[key] = this.userInteraction.userValues[key];
       } else {
         // 100% AUDIO CONTROL
-        this.targetValues[key] = audioTargets[key];
+        this.targetValues[key] = audioTargets[key] || this.targetValues[key];
       }
       
       // Apply ultra-smooth interpolation to final values
@@ -263,7 +315,9 @@ export class AudioVisualMapper {
       );
       
       // Apply the smoothed values to the actual parameters
-      parms[key] = this.currentValues[key];
+      if (parms.hasOwnProperty(key)) {
+        parms[key] = this.currentValues[key];
+      }
     });
   }
   

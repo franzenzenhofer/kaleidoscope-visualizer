@@ -1,12 +1,13 @@
 {
   "name": "dream-kaleido-flow",
-  "version": "1.0.0",
-  "description": "Interactive kaleidoscope visualization with touch gestures",
+  "version": "1.5.0",
+  "description": "Mobile Light Toy 2.0 - A tactile light instrument that transforms touch, motion, and sound into mesmerizing patterns",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
+    "test": "node test-app.mjs",
     "generate-icons": "node generate-icons.mjs",
     "install-playwright": "npx playwright install"
   },

@@ -445,6 +445,13 @@ export class AudioAnalyzer {
     return this.dataArray;
   }
   
+  // Get FFT data for ribbons visualization
+  getFFTData() {
+    if (!this.isActive || !this.dataArray) return null;
+    // Return a copy to prevent external modifications
+    return new Uint8Array(this.dataArray);
+  }
+  
   // Get ultra-smooth normalized values (0-1)
   getMetrics() {
     return {

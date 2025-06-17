@@ -1,14 +1,16 @@
 import { resize, canvas, setupMobileViewport } from './canvas.js';
-import { setupPointerInteraction, setupHammerGestures, updateToyPhysics, setupDeviceMotion } from './interaction.js';
+import { setupPointerInteraction, setupHammerGestures, updateToyPhysics, setupDeviceMotion, physics, setDebugHUD } from './interaction.js';
 import { setupDesktopInteractions, updateDesktopPhysics } from './desktop-interactions.js';
-import { draw } from './renderer.js';
+import { draw, setAudioRibbons } from './renderer.js';
 import { enhanceForDesktop, parms } from './config.js';
 import { AudioAnalyzer } from './audio.js';
 import { AudioVisualMapper } from './audio-visual.js';
+import { AudioRibbons } from './ribbons.js';
+import { DebugHUD } from './hud.js';
 
 // Version info
-console.log('🎨 Dream-Kaleido-Flow v1.3.0 - iPod Wheel Controls');
-console.log('🚀 Speed-based circular motion + Perfect physics');
+console.log('🎨 Dream-Kaleido-Flow v1.5.0 - Mobile Light Toy 2.0');
+console.log('🚀 Multi-channel physics, audio ribbons, brightness control');
 
 // Initialize canvas first - CRITICAL for preventing non-finite errors
 setupMobileViewport();
@@ -22,6 +24,13 @@ setTimeout(() => {
 // Initialize audio components early
 const audioAnalyzer = new AudioAnalyzer();
 const audioVisual = new AudioVisualMapper(audioAnalyzer);
+const audioRibbons = new AudioRibbons(audioAnalyzer);
+const debugHUD = new DebugHUD();
+
+// Connect components
+setAudioRibbons(audioRibbons);
+debugHUD.setAudioAnalyzer(audioAnalyzer);
+setDebugHUD(debugHUD);
 
 // Setup interactions based on device and pass audioVisual for proper blending
 if ('ontouchstart' in window) {
@@ -54,6 +63,9 @@ export function updatePhysicsAndAudio(currentTime) {
     // Update visual parameters based on audio
     audioVisual.update();
     
+    // Update ribbons mode
+    audioRibbons.setMode(physics.mode);
+    
     // Update audio level indicator
     const audioLevel = document.getElementById('audioLevel');
     const audioLevelBar = audioLevel?.querySelector('.bar');
@@ -65,6 +77,9 @@ export function updatePhysicsAndAudio(currentTime) {
     // Apply special effects
     audioVisual.applySpecialEffects(audioAnalyzer.getMetrics());
   }
+  
+  // Update debug HUD
+  debugHUD.update();
 }
 
 // Prevent iOS bounce

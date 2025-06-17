@@ -5,6 +5,7 @@ import { parms } from './config.js';
 let lastX = 0;
 let lastY = 0;
 let audioVisual = null; // Store reference to audio-visual mapper
+let debugHUD = null; // Store reference to debug HUD
 
 // Physics state for toy-like interactions
 const physics = {
@@ -21,7 +22,18 @@ const physics = {
   pulsePhase: 0,
   pulseSpeed: 0,
   lastRotation: 0, // For tracking rotation gesture
-  originalSpeed: null // For shake effect
+  originalSpeed: null, // For shake effect
+  // NEW brightness physics
+  luminance: 0.6,
+  luminanceTarget: 0.6,
+  // NEW scale spring physics
+  scale: 1.0,
+  scaleTarget: 1.0,
+  scaleVelocity: 0,
+  // NEW mode state
+  mode: 'Calm', // 'Calm', 'Pulse', 'Rave'
+  longPressTimer: null,
+  debugHUD: false
 };
 
 // Helper function to notify audio visual of user interaction
@@ -29,6 +41,16 @@ function notifyUserInteraction(paramName, value) {
   if (audioVisual && audioVisual.onUserInteraction) {
     audioVisual.onUserInteraction(paramName, value);
   }
+}
+
+// Helper function to clamp values
+function clamp(value, min, max) {
+  return Math.max(min, Math.min(max, value));
+}
+
+// Set debug HUD reference
+export function setDebugHUD(hud) {
+  debugHUD = hud;
 }
 
 // Pointer tweaks: drag horizontally to change swirl, vertically to change slice count.
@@ -66,9 +88,14 @@ export function setupHammerGestures(element, audioVisualMapper = null) {
       [Hammer.Rotate, { enable: true }],
       [Hammer.Swipe, { direction: Hammer.DIRECTION_ALL, velocity: 0.3 }],
       [Hammer.Tap, { event: 'doubletap', taps: 2 }],
-      [Hammer.Tap, { event: 'tripletap', taps: 3 }]
+      [Hammer.Tap, { event: 'tripletap', taps: 3 }],
+      [Hammer.Press, { time: 400 }] // Long press for debug HUD
     ]
   });
+  
+  // Enable pinch and rotate
+  hammer.get('pinch').set({ enable: true });
+  hammer.get('rotate').set({ enable: true });
   
   // Handle pan gestures - CIRCULAR MOTION like iPod wheel
   hammer.on('panstart', (event) => {
@@ -87,72 +114,65 @@ export function setupHammerGestures(element, audioVisualMapper = null) {
     const currentTime = Date.now();
     const deltaTime = Math.max(1, currentTime - physics.lastRotationTime);
     
-    // iPOD WHEEL: Track circular motion speed around center
-    const centerX = window.innerWidth / 2;
-    const centerY = window.innerHeight / 2;
-    const currentAngle = Math.atan2(event.center.y - centerY, event.center.x - centerX);
-    
-    let angleDelta = currentAngle - physics.lastRotationAngle;
-    // Handle angle wrap
-    if (angleDelta > Math.PI) angleDelta -= 2 * Math.PI;
-    if (angleDelta < -Math.PI) angleDelta += 2 * Math.PI;
-    
-    // iPOD WHEEL PHYSICS: Angular velocity determines rotation speed
-    const angularVelocity = angleDelta / (deltaTime / 1000); // radians per second
-    
-    // Only respond to circular motion (not straight lines)
-    const distanceFromCenter = Math.sqrt(
-      Math.pow(event.center.x - centerX, 2) + 
-      Math.pow(event.center.y - centerY, 2)
-    );
-    const screenSize = Math.min(window.innerWidth, window.innerHeight);
-    const minRadius = screenSize * 0.2; // Wheel starts 20% from center
-    const maxRadius = screenSize * 0.45; // Wheel ends at 45% from center
-    
-    // Check if we're in the wheel zone
-    if (distanceFromCenter > minRadius && distanceFromCenter < maxRadius && Math.abs(angleDelta) > 0.0001) {
-      // iPOD SENSITIVITY: More responsive to speed changes
-      // Direct mapping - the speed you move is the speed it rotates
-      let wheelSpeed = angularVelocity * 0.5; // Comfortable scaling
-      
-      // Add subtle acceleration for very fast movements
-      if (Math.abs(angularVelocity) > 3) {
-        wheelSpeed *= 1.2; // Boost for fast spins
-      }
-      
-      // Smooth the speed changes slightly for comfort
-      parms.swirlSpeed = parms.swirlSpeed * 0.7 + wheelSpeed * 0.3;
-      parms.swirlSpeed = Math.max(-3, Math.min(3, parms.swirlSpeed));
-      notifyUserInteraction('swirlSpeed', parms.swirlSpeed);
-      
-      // Reset momentum while actively scrolling
-      physics.rotationVelocity = 0;
-      
-      // Visual feedback that we're in wheel mode
-      physics.pulseSpeed = 0.1; // Subtle pulse
+    // Check if it's a three-finger gesture for brightness control
+    if (event.pointers.length === 3) {
+      // Vertical three-finger slide for brightness
+      physics.luminanceTarget = clamp(physics.luminanceTarget - event.deltaY/800, 0.3, 1);
+      notifyUserInteraction('luminance', physics.luminanceTarget);
+      return; // Don't process other pan gestures
     }
     
-    // LINEAR MOTION: Up/down for size, left/right for complexity
-    const deltaX = event.center.x - lastX;
-    const deltaY = event.center.y - lastY;
-    
-    // PHYSICAL: Vertical movement = SIZE (like stretching/squashing)
-    if (Math.abs(deltaY) > 2) {
-      // Moving UP = BIGGER, moving DOWN = SMALLER
-      const sizeChange = -deltaY * 0.002; // Negative because up is negative Y
-      const newBaseRadius = Math.max(0.1, Math.min(0.6, parms.baseRadius + sizeChange));
-      parms.baseRadius = newBaseRadius;
-      notifyUserInteraction('baseRadius', newBaseRadius);
+    // Single finger: iPOD WHEEL behavior
+    if (event.pointers.length === 1) {
+      // iPOD WHEEL: Track circular motion speed around center
+      const centerX = window.innerWidth / 2;
+      const centerY = window.innerHeight / 2;
+      const currentAngle = Math.atan2(event.center.y - centerY, event.center.x - centerX);
       
-      // Also adjust element size
-      const newSizeMod = Math.max(0.05, Math.min(0.5, parms.sizeMod + sizeChange * 0.5));
-      parms.sizeMod = newSizeMod;
-      notifyUserInteraction('sizeMod', newSizeMod);
+      let angleDelta = currentAngle - physics.lastRotationAngle;
+      // Handle angle wrap
+      if (angleDelta > Math.PI) angleDelta -= 2 * Math.PI;
+      if (angleDelta < -Math.PI) angleDelta += 2 * Math.PI;
+      
+      // iPOD WHEEL PHYSICS: Angular velocity determines rotation speed
+      const angularVelocity = angleDelta / (deltaTime / 1000); // radians per second
+      
+      // Only respond to circular motion (not straight lines)
+      const distanceFromCenter = Math.sqrt(
+        Math.pow(event.center.x - centerX, 2) + 
+        Math.pow(event.center.y - centerY, 2)
+      );
+      const screenSize = Math.min(window.innerWidth, window.innerHeight);
+      const minRadius = screenSize * 0.2; // Wheel starts 20% from center
+      const maxRadius = screenSize * 0.45; // Wheel ends at 45% from center
+      
+      // Check if we're in the wheel zone
+      if (distanceFromCenter > minRadius && distanceFromCenter < maxRadius && Math.abs(angleDelta) > 0.0001) {
+        // iPOD SENSITIVITY: More responsive to speed changes
+        // Direct mapping - the speed you move is the speed it rotates
+        let wheelSpeed = angularVelocity * 0.5; // Comfortable scaling
+        
+        // Add subtle acceleration for very fast movements
+        if (Math.abs(angularVelocity) > 3) {
+          wheelSpeed *= 1.2; // Boost for fast spins
+        }
+        
+        // Smooth the speed changes slightly for comfort
+        parms.swirlSpeed = parms.swirlSpeed * 0.7 + wheelSpeed * 0.3;
+        parms.swirlSpeed = Math.max(-3, Math.min(3, parms.swirlSpeed));
+        notifyUserInteraction('swirlSpeed', parms.swirlSpeed);
+        
+        // Reset momentum while actively scrolling
+        physics.rotationVelocity = 0;
+        
+        // Visual feedback that we're in wheel mode
+        physics.pulseSpeed = 0.1; // Subtle pulse
+      }
     }
     
     lastX = event.center.x;
     lastY = event.center.y;
-    physics.lastRotationAngle = currentAngle;
+    physics.lastRotationAngle = Math.atan2(event.center.y - window.innerHeight/2, event.center.x - window.innerWidth/2);
     physics.lastRotationTime = currentTime;
   });
   
@@ -208,75 +228,28 @@ export function setupHammerGestures(element, audioVisualMapper = null) {
     }
   });
   
-  // Handle pinch for INTUITIVE zoom control
-  hammer.on('pinch', (event) => {
-    // INTUITIVE: Pinch controls overall scale
-    const scale = event.scale;
-    
-    // Base radius changes with pinch - expand/contract the whole pattern
-    const currentRadius = parms.baseRadius;
-    const newBaseRadius = Math.max(0.1, Math.min(0.6, currentRadius * scale));
-    parms.baseRadius = newBaseRadius;
-    notifyUserInteraction('baseRadius', newBaseRadius);
-    
-    // Size modification scales with pinch
-    const currentSize = parms.sizeMod;
-    const newSizeMod = Math.max(0.05, Math.min(0.6, currentSize * scale));
-    parms.sizeMod = newSizeMod;
-    notifyUserInteraction('sizeMod', newSizeMod);
-    
-    // Add smooth transition on pinch end
-    if (event.isFinal) {
-      physics.pulseSpeed = Math.abs(1 - scale) * 0.5;
-    }
+  // Handle pinch for scale control with spring physics
+  hammer.on('pinch pinchmove', (event) => {
+    physics.scaleTarget = clamp(event.scale, 0.6, 1.8);
+    notifyUserInteraction('scaleTarget', physics.scaleTarget);
   });
   
-  // Handle rotate for PHYSICAL rotation
-  hammer.on('rotate', (event) => {
-    // PHYSICAL: Two-finger rotation = direct control
-    // event.rotation is cumulative degrees from start
-    const rotationRadians = event.rotation * Math.PI / 180;
-    
-    // Direct rotation control - rotate the visual as fingers rotate
-    parms.swirlSpeed = Math.max(-1.5, Math.min(1.5, rotationRadians * 0.3));
-    notifyUserInteraction('swirlSpeed', parms.swirlSpeed);
-    
-    // Store rotation for momentum when gesture ends
-    physics.lastRotation = event.rotation;
+  // Handle rotate for hue drift control
+  hammer.on('rotate rotatemove', (event) => {
+    // Two-finger rotation controls hue drift
+    parms.hueDrift = clamp(event.rotation / 180, -1, 1);
+    notifyUserInteraction('hueDrift', parms.hueDrift);
   });
   
-  hammer.on('rotateend', (event) => {
-    // Add momentum based on final rotation speed
-    const finalRotation = event.rotation;
-    const rotationDelta = finalRotation - (physics.lastRotation || 0);
-    physics.rotationVelocity = rotationDelta * 0.1;
-  });
-  
-  // Double tap for complexity toggle
+  // Double tap for mode cycle
   hammer.on('doubletap', (event) => {
-    // INTUITIVE: Double tap cycles through complexity levels
-    const complexityLevels = [
-      { slices: 6, circles: 4 },   // Simple
-      { slices: 10, circles: 7 },  // Medium
-      { slices: 16, circles: 10 }  // Complex
-    ];
+    // Cycle through modes: Calm -> Pulse -> Rave
+    const modes = ['Calm', 'Pulse', 'Rave'];
+    const currentIndex = modes.indexOf(physics.mode);
+    physics.mode = modes[(currentIndex + 1) % modes.length];
     
-    // Find current level and go to next
-    let currentLevel = 0;
-    for (let i = 0; i < complexityLevels.length; i++) {
-      if (parms.slices >= complexityLevels[i].slices) {
-        currentLevel = i;
-      }
-    }
-    
-    // Cycle to next level
-    const nextLevel = (currentLevel + 1) % complexityLevels.length;
-    const newSettings = complexityLevels[nextLevel];
-    
-    parms.slices = newSettings.slices;
-    parms.circles = newSettings.circles;
-    notifyUserInteraction('slices', newSettings.slices);
-    notifyUserInteraction('circles', newSettings.circles);
+    // Notify of mode change
+    notifyUserInteraction('mode', physics.mode);
     
     // Add visual feedback
     physics.pulseSpeed = 0.5;
@@ -299,6 +272,17 @@ export function setupHammerGestures(element, audioVisualMapper = null) {
     notifyUserInteraction('slices', newSlices);
     notifyUserInteraction('circles', newCircles);
     notifyUserInteraction('hueSpeed', newHueSpeed);
+  });
+  
+  // Long press for debug HUD toggle
+  hammer.on('press', (event) => {
+    physics.debugHUD = !physics.debugHUD;
+    notifyUserInteraction('debugHUD', physics.debugHUD);
+    
+    // Toggle HUD visibility
+    if (debugHUD) {
+      debugHUD.toggle();
+    }
   });
   
   // Prevent default touch behavior
@@ -324,6 +308,18 @@ export function updateToyPhysics(deltaTime) {
       notifyUserInteraction('swirlSpeed', 0);
     }
   }
+  
+  // Scale spring physics
+  const acc = (physics.scaleTarget - physics.scale) * 0.22;
+  physics.scaleVelocity = (physics.scaleVelocity + acc) * 0.88;
+  physics.scale += physics.scaleVelocity;
+  parms.baseRadius = clamp(physics.scale * 0.35, 0.1, 0.6);
+  notifyUserInteraction('baseRadius', parms.baseRadius);
+  
+  // Luminance lerp
+  physics.luminance += (physics.luminanceTarget - physics.luminance) * 0.1;
+  parms.luminance = physics.luminance;
+  notifyUserInteraction('luminance', parms.luminance);
   
   // Apply pulse effects
   if (physics.pulseSpeed > 0.01) {
@@ -385,3 +381,6 @@ export function setupDeviceMotion(audioVisualMapper = null) {
     }, { passive: true });
   }
 }
+
+// Export physics for debug HUD
+export { physics };
