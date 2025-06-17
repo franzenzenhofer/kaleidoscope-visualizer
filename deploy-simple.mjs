@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { execSync } from 'child_process';
-import { readFileSync, writeFileSync, existsSync, mkdirSync, cpSync } from 'fs';
+import { readFileSync, writeFileSync, existsSync, mkdirSync, cpSync, rmSync } from 'fs';
 import { join } from 'path';
 
 // Helper function to run shell commands
@@ -74,28 +74,19 @@ export const BUILD_COMMIT = '${getOutput('git rev-parse HEAD')}';
       console.log('✅ Updated manifest.json');
     }
 
-    // 3. Build the project
+    // 3. Commit version updates to main branch
+    console.log('\n📌 Committing version updates...');
+    run('git add -A', { ignoreError: true });
+    run(`git commit -m "🔄 Update cache busters to v${version}"`, { ignoreError: true });
+    run('git push origin main');
+
+    // 4. Build the project
     console.log('\n🔨 Building project...');
     run('npm run build');
     console.log('✅ Build complete');
 
-    // 4. Post-build cache busting for dist files
-    console.log('\n🔄 Applying cache busters to built files...');
-    
-    // Update any imports in dist HTML files
-    if (existsSync('dist/index.html')) {
-      let distIndex = readFileSync('dist/index.html', 'utf8');
-      
-      // Vite already handles module imports, but let's ensure cache busting
-      distIndex = distIndex.replace(/\.js\?v=[\d.]+/g, `.js?v=${version}`);
-      distIndex = distIndex.replace(/\.css\?v=[\d.]+/g, `.css?v=${version}`);
-      
-      writeFileSync('dist/index.html', distIndex);
-      console.log('✅ Updated dist/index.html');
-    }
-
-    // 5. Copy additional files
-    console.log('\n📋 Copying additional files...');
+    // 5. Post-build processing
+    console.log('\n📋 Processing built files...');
     
     // Copy CNAME if it exists
     if (existsSync('CNAME')) {
@@ -109,52 +100,55 @@ export const BUILD_COMMIT = '${getOutput('git rev-parse HEAD')}';
       console.log('✅ Copied service worker');
     }
 
-    // 6. Create deployment info
-    console.log('\n📝 Creating deployment info...');
+    // Create deployment info
     const deployInfo = {
       version,
       deployedAt: new Date().toISOString(),
       commit: getOutput('git rev-parse HEAD'),
-      branch: getOutput('git rev-parse --abbrev-ref HEAD'),
-      nodeVersion: process.version,
-      buildTool: 'vite'
+      branch: getOutput('git rev-parse --abbrev-ref HEAD')
     };
     
     writeFileSync('dist/deploy-info.json', JSON.stringify(deployInfo, null, 2));
     console.log('✅ Created deploy-info.json');
 
-    // 7. Commit version updates
-    console.log('\n📌 Committing version updates...');
-    run('git add -A', { ignoreError: true });
-    run(`git commit -m "🔄 Update cache busters to v${version}"`, { ignoreError: true });
-
-    // 8. Deploy to GitHub Pages
+    // 6. Deploy to GitHub Pages using simple method
     console.log('\n🌐 Deploying to GitHub Pages...');
     
-    // Ensure gh-pages branch exists
-    const branches = getOutput('git branch -r');
-    if (!branches.includes('origin/gh-pages')) {
-      console.log('📌 Creating gh-pages branch...');
-      run('git checkout --orphan gh-pages');
-      run('git rm -rf .');
-      run('git commit --allow-empty -m "Initial gh-pages commit"');
-      run('git push origin gh-pages');
-      run('git checkout main');
-    }
-
-    // Deploy using git subtree (force push to handle conflicts)
-    run('git add dist -f');
-    run(`git commit -m "Deploy: v${version}"`, { ignoreError: true });
+    // Save current branch
+    const currentBranch = getOutput('git rev-parse --abbrev-ref HEAD');
     
-    // Force push to gh-pages to avoid conflicts
-    console.log('Force pushing to gh-pages...');
-    run('git push origin `git subtree split --prefix dist main`:gh-pages --force');
+    // Copy dist to temporary location
+    const tempDir = '.deploy-temp';
+    if (existsSync(tempDir)) {
+      rmSync(tempDir, { recursive: true });
+    }
+    cpSync('dist', tempDir, { recursive: true });
+    
+    // Switch to gh-pages branch
+    try {
+      run('git checkout gh-pages', { ignoreError: true });
+    } catch (e) {
+      // Create gh-pages if it doesn't exist
+      run('git checkout -b gh-pages');
+    }
+    
+    // Clean directory and copy new files
+    run('git rm -rf .', { ignoreError: true });
+    run('git clean -fxd', { ignoreError: true });
+    
+    // Copy files from temp directory
+    cpSync(tempDir, '.', { recursive: true });
+    rmSync(tempDir, { recursive: true });
+    
+    // Commit and push
+    run('git add -A');
+    run(`git commit -m "Deploy v${version}"`);
+    run('git push origin gh-pages --force');
+    
+    // Switch back to original branch
+    run(`git checkout ${currentBranch}`);
 
-    // 9. Push main branch changes
-    console.log('\n📤 Pushing changes to main branch...');
-    run('git push origin main');
-
-    // 10. Create and push tag
+    // 7. Create and push tag
     console.log('\n🏷️  Creating release tag...');
     const tagMessage = `Release v${version} - ${new Date().toLocaleDateString()}`;
     run(`git tag -a "v${version}" -m "${tagMessage}"`, { ignoreError: true });

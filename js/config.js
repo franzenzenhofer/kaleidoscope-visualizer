@@ -6,7 +6,7 @@ export const parms = {
   swirlSpeed: 0.2,       // Increased from 0.15 - more dynamic
   hueSpeed: 35,          // Slightly increased for better color flow
   sizeMod: 0.18,         // Decreased from 0.2 - finer elements
-  luminance: 0.6,        // 0-1 master brightness
+  luminance: 1.0,        // 0-1 master brightness
   hueDrift: 0            // audio / rotate gesture
 };
 
@@ -18,7 +18,7 @@ export const defaultParms = {
   swirlSpeed: 0.2,
   hueSpeed: 35,
   sizeMod: 0.18,
-  luminance: 0.6,
+  luminance: 1.0,
   hueDrift: 0
 };
 
@@ -33,7 +33,7 @@ export function enhanceForDesktop() {
     parms.swirlSpeed = 0.25;   // Smooth motion
     parms.hueSpeed = 40;       // Rich color transitions
     parms.sizeMod = 0.16;      // Fine detail
-    parms.luminance = 0.6;     // Same brightness default
+    parms.luminance = 1.0;     // Full brightness default
     parms.hueDrift = 0;        // No initial drift
   }
 }
