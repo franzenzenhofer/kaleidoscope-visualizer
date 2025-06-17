@@ -46,10 +46,10 @@ function drawMotif(t) {
 
     // CRISP VISUALS: Enhanced gradients with luminance control
     const g = ctx.createRadialGradient(x,y,0, x,y,size);
-    // Use luminance to modulate brightness without additive blending
-    g.addColorStop(0, `hsla(${hue},100%,${70*luminance}%,${0.8*luminance})`);
-    g.addColorStop(0.3, `hsla(${hue},100%,${60*luminance}%,${0.7*luminance})`);
-    g.addColorStop(0.7, `hsla(${(hue+120)%360},90%,${40*luminance}%,${0.3*luminance})`);
+    // Original alpha values restored - only modulate lightness with luminance
+    g.addColorStop(0, `hsla(${hue},100%,${70*luminance}%,1)`);
+    g.addColorStop(0.3, `hsla(${hue},100%,${60*luminance}%,0.9)`);
+    g.addColorStop(0.7, `hsla(${(hue+120)%360},90%,${40*luminance}%,0.4)`);
     g.addColorStop(1, `hsla(${(hue+180)%360},80%,${20*luminance}%,0)`)
     
     ctx.fillStyle = g;
@@ -59,7 +59,7 @@ function drawMotif(t) {
     
     // Add subtle outline for crispness on some circles
     if (i % 2 === 0) {
-      ctx.strokeStyle = `hsla(${hue},100%,${80*luminance}%,${0.3*luminance})`;
+      ctx.strokeStyle = `hsla(${hue},100%,${80*luminance}%,0.3)`;
       ctx.lineWidth = 0.5 * dpr; // Thin line adjusted for device pixel ratio
       ctx.stroke();
     }

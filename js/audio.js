@@ -233,11 +233,28 @@ export class AudioAnalyzer {
             });
           }
           
-          // Create media element source only once
+          // Create media element source only once - check if already exists
           if (!this.musicSource) {
-            this.musicSource = this.audioContext.createMediaElementSource(this.musicPlayer);
-            this.musicSource.connect(this.analyser);
-            this.musicSource.connect(this.audioContext.destination);
+            try {
+              this.musicSource = this.audioContext.createMediaElementSource(this.musicPlayer);
+              this.musicSource.connect(this.analyser);
+              this.musicSource.connect(this.audioContext.destination);
+            } catch (e) {
+              // If already connected, just use existing connection
+              console.log('Audio element already connected, using existing connection');
+              // Skip to success if element is already connected
+              if (e.message.includes('already connected')) {
+                // Still successful, just using existing connection
+                console.log('🎵 Using existing audio connection');
+                this.isMusicMode = true;
+                this.isMicrophoneMode = false;
+                this.isActive = true;
+                this.lastUpdateTime = performance.now();
+                this.analyze();
+                return true;
+              }
+              throw e; // Re-throw if it's a different error
+            }
           }
           
           // Ensure looping is enabled
