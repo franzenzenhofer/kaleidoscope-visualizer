@@ -57,14 +57,6 @@ export const BUILD_COMMIT = '${getOutput('git rev-parse HEAD')}';
     writeFileSync('index.html', indexHtml);
     console.log('✅ Updated cache busters in index.html');
 
-    // Update service worker cache version
-    if (existsSync('sw.js')) {
-      let swContent = readFileSync('sw.js', 'utf8');
-      swContent = swContent.replace(/const CACHE_VERSION = '[^']*'/g, `const CACHE_VERSION = 'v${version}'`);
-      swContent = swContent.replace(/const VERSION = '[^']*'/g, `const VERSION = '${version}'`);
-      writeFileSync('sw.js', swContent);
-      console.log('✅ Updated service worker cache version');
-    }
 
     // Update manifest.json
     if (existsSync('public/manifest.json')) {
@@ -103,11 +95,6 @@ export const BUILD_COMMIT = '${getOutput('git rev-parse HEAD')}';
       console.log('✅ Copied CNAME');
     }
 
-    // Copy service worker
-    if (existsSync('sw.js')) {
-      cpSync('sw.js', 'dist/sw.js');
-      console.log('✅ Copied service worker');
-    }
 
     // 6. Create deployment info
     console.log('\n📝 Creating deployment info...');

@@ -129,7 +129,7 @@ export class AudioAnalyzer {
           
           // Provide user-friendly error messages
           if (fallbackError.name === 'NotAllowedError') {
-            alert('🎤 Microphone access denied. Please:\\n\\n1. Refresh the page\\n2. Click "Allow" when prompted\\n3. Check your browser settings if needed');
+            alert('🎤 Microphone access denied. Please:\n\n1. Refresh the page\n2. Click "Allow" when prompted\n3. Check your browser settings if needed');
           } else if (fallbackError.name === 'NotFoundError') {
             alert('🎤 No microphone found. Please check your device has a working microphone.');
           } else if (fallbackError.name === 'NotReadableError') {
@@ -162,13 +162,16 @@ export class AudioAnalyzer {
     }
   }
   
-  // Start music file playback - SIMPLE VERSION
+  // Start music file playback with retry logic
   async startMusic() {
     try {
       if (!await this.initAudioContext()) return false;
       
       // Stop any existing sources
       this.stopAllSources();
+      
+      // Clear any existing music source reference to allow reconnection
+      this.musicSource = null;
       
       // Get music player element
       this.musicPlayer = document.getElementById('musicPlayer');
@@ -177,37 +180,126 @@ export class AudioAnalyzer {
         return false;
       }
       
-      // Set source if not already set
-      if (!this.musicPlayer.src) {
-        this.musicPlayer.src = 'Dea_Fungorum_cut_fadeout.mp3';
-      }
-      
       // Resume audio context if suspended (required for user interaction)
       if (this.audioContext.state === 'suspended') {
         await this.audioContext.resume();
       }
       
-      // Create media element source only if it doesn't exist
-      if (!this.musicSource) {
-        this.musicSource = this.audioContext.createMediaElementSource(this.musicPlayer);
-        this.musicSource.connect(this.analyser);
-        this.musicSource.connect(this.audioContext.destination); // Connect to speakers
+      // Implement retry logic for audio loading
+      const maxRetries = 5;
+      const retryDelays = [100, 500, 1000, 2000, 3000]; // Progressive delays
+      let lastError = null;
+      
+      for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        try {
+          // Force reload the audio source
+          if (attempt > 0) {
+            console.log(`🎵 Retry attempt ${attempt}/${maxRetries} to load audio...`);
+            this.musicPlayer.load(); // Force reload
+            
+            // Wait before retry
+            if (attempt < retryDelays.length) {
+              await new Promise(resolve => setTimeout(resolve, retryDelays[attempt - 1]));
+            }
+          }
+          
+          // Check if audio is ready
+          if (this.musicPlayer.readyState < 2) { // HAVE_CURRENT_DATA
+            // Try to load the audio
+            await new Promise((resolve, reject) => {
+              const loadTimeout = setTimeout(() => {
+                reject(new Error('Audio load timeout'));
+              }, 5000); // 5 second timeout per attempt
+              
+              const handleCanPlay = () => {
+                clearTimeout(loadTimeout);
+                cleanup();
+                resolve();
+              };
+              
+              const handleError = (e) => {
+                clearTimeout(loadTimeout);
+                cleanup();
+                reject(e);
+              };
+              
+              const cleanup = () => {
+                this.musicPlayer.removeEventListener('canplay', handleCanPlay);
+                this.musicPlayer.removeEventListener('error', handleError);
+              };
+              
+              this.musicPlayer.addEventListener('canplay', handleCanPlay, { once: true });
+              this.musicPlayer.addEventListener('error', handleError, { once: true });
+              
+              // Trigger load
+              this.musicPlayer.load();
+            });
+          }
+          
+          // Create media element source only once - check if already exists
+          if (!this.musicSource) {
+            try {
+              this.musicSource = this.audioContext.createMediaElementSource(this.musicPlayer);
+              this.musicSource.connect(this.analyser);
+              this.musicSource.connect(this.audioContext.destination);
+            } catch (e) {
+              // If already connected, just use existing connection
+              console.log('Audio element already connected, using existing connection');
+              // Skip to success if element is already connected
+              if (e.message.includes('already connected')) {
+                // Still successful, just using existing connection
+                console.log('🎵 Using existing audio connection');
+                this.isMusicMode = true;
+                this.isMicrophoneMode = false;
+                this.isActive = true;
+                this.lastUpdateTime = performance.now();
+                this.analyze();
+                return true;
+              }
+              throw e; // Re-throw if it's a different error
+            }
+          }
+          
+          // Ensure looping is enabled
+          this.musicPlayer.loop = true;
+          
+          // Add event listeners to ensure continuous playback
+          this.musicPlayer.addEventListener('ended', () => {
+            if (this.isMusicMode) {
+              this.musicPlayer.play();
+            }
+          });
+          
+          // Try to start playback
+          await this.musicPlayer.play();
+          
+          // Success! Audio loaded and playing
+          console.log('🎵 Audio loaded successfully');
+          this.isMusicMode = true;
+          this.isMicrophoneMode = false;
+          this.isActive = true;
+          this.lastUpdateTime = performance.now();
+          this.analyze();
+          
+          return true;
+          
+        } catch (error) {
+          lastError = error;
+          console.warn(`Audio load attempt ${attempt + 1} failed:`, error.message);
+          
+          // Clean up failed attempt
+          if (this.musicSource) {
+            this.musicSource.disconnect();
+            this.musicSource = null;
+          }
+        }
       }
       
-      // Ensure looping is enabled
-      this.musicPlayer.loop = true;
+      // All retries failed - but don't show overlay, just continue without audio
+      console.error('🎵 Audio loading failed after all retries:', lastError);
+      console.log('🎨 Continuing without audio - visualizer will work with user interactions only');
       
-      // Start playback
-      await this.musicPlayer.play();
-      
-      this.isMusicMode = true;
-      this.isMicrophoneMode = false;
-      this.isActive = true;
-      this.lastUpdateTime = performance.now();
-      this.analyze();
-      
-      console.log('🎵 Audio playing');
-      return true;
+      return false;
     } catch (error) {
       console.error('Failed to start music playback:', error);
       return false;
@@ -227,8 +319,11 @@ export class AudioAnalyzer {
       this.microphoneStream = null;
     }
     
-    // Don't disconnect musicSource - keep it connected
-    // Just pause the audio
+    if (this.musicSource) {
+      this.musicSource.disconnect();
+      this.musicSource = null;
+    }
+    
     if (this.musicPlayer && !this.musicPlayer.paused) {
       this.musicPlayer.pause();
     }
@@ -240,12 +335,6 @@ export class AudioAnalyzer {
   // Stop audio analysis completely
   stop() {
     this.stopAllSources();
-    
-    // Now disconnect music source
-    if (this.musicSource) {
-      this.musicSource.disconnect();
-      this.musicSource = null;
-    }
     
     if (this.audioContext) {
       this.audioContext.close();

@@ -289,16 +289,5 @@
 
 <!-- Cache busted JavaScript modules -->
 <script type="module" src="js/main.js?v=1.5.0-20241227-ipod"></script>
-
-<!-- Register Service Worker -->
-<script>
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js')
-      .then(registration => console.log('SW registered:', registration))
-      .catch(error => console.log('SW registration failed:', error));
-  });
-}
-</script>
 </body>
 </html>
