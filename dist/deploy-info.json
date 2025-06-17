@@ -1,8 +1,0 @@
-{
-  "version": "1.5.0",
-  "deployedAt": "2025-06-17T09:00:15.200Z",
-  "commit": "834f36bd46aed69a8bea6eb31ef75c69c5f94f46",
-  "branch": "main",
-  "nodeVersion": "v22.16.0",
-  "buildTool": "vite"
-}
