@@ -15,6 +15,7 @@ export default defineConfig({
   },
   server: {
     port: 3000,
-    open: true
+    open: true,
+    hmr: false  // Disable HMR to prevent WebSocket errors
   }
 });
